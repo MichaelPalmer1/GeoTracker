@@ -1,7 +1,9 @@
 package com.kitty.geotracker;
 
 import android.app.Activity;
+import android.content.Context;
 import android.os.Bundle;
+import android.telephony.TelephonyManager;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
@@ -25,6 +27,12 @@ public class MeteorActivity extends Activity implements MeteorCallback {
 
         // establish the connection
         mMeteor.connect();
+
+        TelephonyManager tManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
+        String uuid = tManager.getDeviceId();
+
+        mMeteor.subscribe("SessionsList", new String[] { uuid });
+        mMeteor.subscribe("GPDData", new String[] { uuid });
     }
 
     public void onConnect(boolean signedInAutomatically) { }
