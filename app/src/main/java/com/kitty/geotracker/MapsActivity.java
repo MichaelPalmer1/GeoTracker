@@ -2,19 +2,24 @@ package com.kitty.geotracker;
 
 import android.Manifest;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
+import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
+import android.view.View;
 import android.widget.ArrayAdapter;
 import android.widget.Spinner;
 import android.widget.Toast;
 
+import com.getbase.floatingactionbutton.FloatingActionButton;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -34,7 +39,7 @@ import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback, SubscribeListener {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback, SubscribeListener, View.OnClickListener {
 
     private GoogleMap mMap;
 
@@ -63,7 +68,9 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mapFragment.getMapAsync(this);
 
         // create a new instance
-        MeteorSingleton.createInstance(this, "ws://10.30.50.68:3000/websocket", new InMemoryDatabase());
+        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
+        String meteorIp = prefs.getString("meteor_ip", "127.0.0.1");
+        MeteorSingleton.createInstance(this, "ws://" + meteorIp + ":3000/websocket", new InMemoryDatabase());
         mMeteor = MeteorSingleton.getInstance();
 
         // register the callback that will handle events and receive messages
@@ -81,7 +88,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         String uuid = tManager.getDeviceId();
 
         database = mMeteor.getDatabase();
-        mMeteor.subscribe("SessionsList"); // , null, this);
+        mMeteor.subscribe("SessionsList");
+
+        FloatingActionButton button = (FloatingActionButton) findViewById(R.id.btn_settings);
+        button.setOnClickListener(this);
+    }
+
+    public void onClick(View v) {
+        if (v.getId() == R.id.btn_settings) {
+            Intent intent = new Intent(this, SettingsActivity.class);
+            startActivity(intent);
+        }
     }
 
     private void initializeCollections() {

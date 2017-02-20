@@ -33,6 +33,16 @@
         app:fab_labelsPosition="right">
 
         <com.getbase.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_settings"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:fab_colorNormal="@color/white"
+            app:fab_size="mini"
+            app:fab_title="Settings"
+            app:fab_icon="@drawable/ic_build_black_24dp"
+            app:fab_colorPressed="@color/white_pressed"/>
+
+        <com.getbase.floatingactionbutton.FloatingActionButton
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
