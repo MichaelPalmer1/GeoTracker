@@ -28,12 +28,13 @@ import java.util.ArrayList;
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
+import im.delight.android.ddp.SubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback, SubscribeListener {
 
     private GoogleMap mMap;
 
@@ -45,17 +46,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     private Database database;
     private Collection sessions;
 
+    private Spinner sessionList;
+
+    private static final String COLLECTION_SESSIONS = "sessions";
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
+
+        sessionList = (Spinner) findViewById(R.id.sessionList);
+
         // Obtain the SupportMapFragment and get notified when the map is ready to be used.
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
         // create a new instance
-        MeteorSingleton.createInstance(this, "ws://192.168.0.100:3000/websocket", new InMemoryDatabase());
+        MeteorSingleton.createInstance(this, "ws://10.30.50.68:3000/websocket", new InMemoryDatabase());
         mMeteor = MeteorSingleton.getInstance();
 
         // register the callback that will handle events and receive messages
@@ -72,17 +80,23 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         TelephonyManager tManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
         String uuid = tManager.getDeviceId();
 
-//        mMeteor.subscribe("SessionsList");
-        sessions = database.getCollection("sessions");
         database = mMeteor.getDatabase();
+        mMeteor.subscribe("SessionsList"); // , null, this);
+    }
 
+    private void initializeCollections() {
+        if (sessions == null) {
+            sessions = database.getCollection("sessions");
+        }
+    }
+
+    private void updateSessionList() {
         ArrayList<String> s = new ArrayList<>();
         for (Document doc : sessions.find()) {
             s.add(doc.getField("title").toString());
         }
 
-        Spinner sessionList = (Spinner) findViewById(R.id.sessionList);
-        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, s);
+        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, s);
         adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
         sessionList.setAdapter(adapter);
     }
@@ -92,21 +106,24 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onDisconnect() { }
 
     public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
-        // parse the JSON and manage the data yourself (not recommended)
-        // or
-        // enable a database (see section "Using databases to manage data") (recommended)
+        initializeCollections();
+        if (collectionName.equals(COLLECTION_SESSIONS)) {
+            updateSessionList();
+        }
     }
 
     public void onDataChanged(String collectionName, String documentID, String updatedValuesJson, String removedValuesJson) {
-        // parse the JSON and manage the data yourself (not recommended)
-        // or
-        // enable a database (see section "Using databases to manage data") (recommended)
+        initializeCollections();
+        if (collectionName.equals(COLLECTION_SESSIONS)) {
+            updateSessionList();
+        }
     }
 
     public void onDataRemoved(String collectionName, String documentID) {
-        // parse the JSON and manage the data yourself (not recommended)
-        // or
-        // enable a database (see section "Using databases to manage data") (recommended)
+        initializeCollections();
+        if (collectionName.equals(COLLECTION_SESSIONS)) {
+            updateSessionList();
+        }
     }
 
     public void onException(Exception e) { }
@@ -115,11 +132,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onDestroy() {
         mMeteor.disconnect();
         mMeteor.removeCallback(this);
-        // or
-        // mMeteor.removeCallbacks();
-
-        // ...
-
         super.onDestroy();
     }
 
@@ -191,5 +203,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
             mMap.moveCamera(CameraUpdateFactory.newLatLng(myPosition));
         }
+    }
+
+    @Override
+    public void onSuccess() {
+
+    }
+
+    @Override
+    public void onError(String error, String reason, String details) {
+
     }
 }
