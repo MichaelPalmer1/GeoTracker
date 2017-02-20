@@ -13,6 +13,12 @@
               android:layout_width="match_parent"
               android:layout_height="match_parent"/>
 
+    <Spinner
+        android:id="@+id/sessionList"
+        android:gravity="bottom|end"
+        android:layout_width="300dp"
+        android:layout_height="wrap_content" />
+
     <com.getbase.floatingactionbutton.FloatingActionsMenu
         android:id="@+id/right_labels"
         android:layout_width="wrap_content"

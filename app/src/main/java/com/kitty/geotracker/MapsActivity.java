@@ -1,6 +1,7 @@
 package com.kitty.geotracker;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.pm.PackageManager;
 import android.location.Criteria;
 import android.location.Location;
@@ -9,6 +10,9 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.telephony.TelephonyManager;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.google.android.gms.maps.CameraUpdateFactory;
@@ -19,13 +23,27 @@ import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback {
+import java.util.ArrayList;
+
+import im.delight.android.ddp.Meteor;
+import im.delight.android.ddp.MeteorCallback;
+import im.delight.android.ddp.MeteorSingleton;
+import im.delight.android.ddp.db.Collection;
+import im.delight.android.ddp.db.Database;
+import im.delight.android.ddp.db.Document;
+import im.delight.android.ddp.db.memory.InMemoryDatabase;
+
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback {
 
     private GoogleMap mMap;
 
     private UiSettings mUiSettings;
 
     private LatLng myPosition;
+
+    private Meteor mMeteor;
+    private Database database;
+    private Collection sessions;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -35,6 +53,74 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
+
+        // create a new instance
+        MeteorSingleton.createInstance(this, "ws://192.168.0.100:3000/websocket", new InMemoryDatabase());
+        mMeteor = MeteorSingleton.getInstance();
+
+        // register the callback that will handle events and receive messages
+        mMeteor.addCallback(this);
+
+        // establish the connection
+        mMeteor.connect();
+
+        if (ActivityCompat.checkSelfPermission(this,
+                Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.READ_PHONE_STATE}, 1);
+        }
+
+        TelephonyManager tManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
+        String uuid = tManager.getDeviceId();
+
+//        mMeteor.subscribe("SessionsList");
+        sessions = database.getCollection("sessions");
+        database = mMeteor.getDatabase();
+
+        ArrayList<String> s = new ArrayList<>();
+        for (Document doc : sessions.find()) {
+            s.add(doc.getField("title").toString());
+        }
+
+        Spinner sessionList = (Spinner) findViewById(R.id.sessionList);
+        ArrayAdapter<String> adapter = new ArrayAdapter<String>(this, android.R.layout.simple_spinner_item, s);
+        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
+        sessionList.setAdapter(adapter);
+    }
+
+    public void onConnect(boolean signedInAutomatically) { }
+
+    public void onDisconnect() { }
+
+    public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
+        // parse the JSON and manage the data yourself (not recommended)
+        // or
+        // enable a database (see section "Using databases to manage data") (recommended)
+    }
+
+    public void onDataChanged(String collectionName, String documentID, String updatedValuesJson, String removedValuesJson) {
+        // parse the JSON and manage the data yourself (not recommended)
+        // or
+        // enable a database (see section "Using databases to manage data") (recommended)
+    }
+
+    public void onDataRemoved(String collectionName, String documentID) {
+        // parse the JSON and manage the data yourself (not recommended)
+        // or
+        // enable a database (see section "Using databases to manage data") (recommended)
+    }
+
+    public void onException(Exception e) { }
+
+    @Override
+    public void onDestroy() {
+        mMeteor.disconnect();
+        mMeteor.removeCallback(this);
+        // or
+        // mMeteor.removeCallbacks();
+
+        // ...
+
+        super.onDestroy();
     }
 
     @Override

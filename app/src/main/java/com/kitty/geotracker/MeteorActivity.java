@@ -4,10 +4,13 @@ import android.app.Activity;
 import android.content.Context;
 import android.os.Bundle;
 import android.telephony.TelephonyManager;
+import android.widget.ArrayAdapter;
+import android.widget.Spinner;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
+import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
 public class MeteorActivity extends Activity implements MeteorCallback {
@@ -19,7 +22,7 @@ public class MeteorActivity extends Activity implements MeteorCallback {
         super.onCreate(savedInstanceState);
 
         // create a new instance
-        MeteorSingleton.createInstance(this, "ws://example.meteor.com/websocket", new InMemoryDatabase());
+        MeteorSingleton.createInstance(this, "ws://192.168.0.100:3000/websocket", new InMemoryDatabase());
         mMeteor = MeteorSingleton.getInstance();
 
         // register the callback that will handle events and receive messages
@@ -32,7 +35,8 @@ public class MeteorActivity extends Activity implements MeteorCallback {
         String uuid = tManager.getDeviceId();
 
         mMeteor.subscribe("SessionsList", new String[] { uuid });
-        mMeteor.subscribe("GPDData", new String[] { uuid });
+        Database db = mMeteor.getDatabase();
+
     }
 
     public void onConnect(boolean signedInAutomatically) { }
