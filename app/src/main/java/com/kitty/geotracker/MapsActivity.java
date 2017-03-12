@@ -56,7 +56,6 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             MeteorController.createInstance(this);
         }
         meteorController = MeteorController.getInstance();
-        meteorController.connect();
     }
 
     public void onClick(View v) {

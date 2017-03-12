@@ -95,7 +95,7 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
         items.clear();
         documentMap.clear();
         for (Document document : sessions.find()) {
-            String title = document.getField("title").toString();
+            String title = document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
             items.add(title);
             documentMap.put(document.getId(), title);
         }
@@ -117,7 +117,7 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
             Collection collection = database.getCollection(collectionName);
             if (!documentMap.containsKey(documentID)) {
                 Document document = collection.getDocument(documentID);
-                String title = document.getField("title").toString();
+                String title = document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
                 items.add(title);
                 documentMap.put(documentID, title);
                 adapter.notifyDataSetChanged();
@@ -146,7 +146,8 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
             String title = documentMap.get(documentID);
             if (title != null) {
                 Collection collection = database.getCollection(collectionName);
-                String newTitle = collection.getDocument(documentID).getField("title").toString();
+                String newTitle = collection.getDocument(documentID)
+                        .getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
                 items.set(items.indexOf(title), newTitle);
                 documentMap.put(documentID, newTitle);
                 adapter.notifyDataSetChanged();
