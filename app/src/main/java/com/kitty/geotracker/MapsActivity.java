@@ -1,7 +1,6 @@
 package com.kitty.geotracker;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
@@ -13,13 +12,12 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
-import android.telephony.TelephonyManager;
+import android.util.Log;
 import android.view.View;
-import android.widget.ArrayAdapter;
-import android.widget.Spinner;
 import android.widget.Toast;
 
 import com.getbase.floatingactionbutton.FloatingActionButton;
+import com.getbase.floatingactionbutton.FloatingActionsMenu;
 import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
@@ -27,123 +25,134 @@ import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.kitty.geotracker.dialogs.JoinSession;
+import com.kitty.geotracker.dialogs.StartSession;
 
-import java.util.ArrayList;
+import java.util.HashMap;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
-import im.delight.android.ddp.SubscribeListener;
-import im.delight.android.ddp.db.Collection;
-import im.delight.android.ddp.db.Database;
-import im.delight.android.ddp.db.Document;
+import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback, SubscribeListener, View.OnClickListener {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback,
+        View.OnClickListener, StartSession.StartSessionListener, JoinSession.JoinSessionListener {
 
     private GoogleMap mMap;
-
-    private UiSettings mUiSettings;
-
     private LatLng myPosition;
 
+    private FloatingActionsMenu floatingMenu;
+
+    // Meteor
     private Meteor mMeteor;
-    private Database database;
-    private Collection sessions;
-
-    private Spinner sessionList;
-
-    private static final String COLLECTION_SESSIONS = "sessions";
+    public static final String COLLECTION_SESSIONS = "Sessions";
+    public static final String COLLECTION_SESSIONS2 = "sessions";
+    public static final String COLLECTION_GPS_DATA = "GPSData";
+    public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_maps);
 
-        sessionList = (Spinner) findViewById(R.id.sessionList);
+        floatingMenu = (FloatingActionsMenu) findViewById(R.id.floatingMenu);
+        FloatingActionButton btnSettings = (FloatingActionButton) findViewById(R.id.btn_settings);
+        FloatingActionButton btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
+        FloatingActionButton btnStartSession = (FloatingActionButton) findViewById(R.id.fab_start_session);
+        btnSettings.setOnClickListener(this);
+        btnJoinSession.setOnClickListener(this);
+        btnStartSession.setOnClickListener(this);
 
-        // Obtain the SupportMapFragment and get notified when the map is ready to be used.
+        // Get map fragment and register callback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        // create a new instance
+        // Get the Meteor server ip from settings
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        String meteorIp = prefs.getString("meteor_ip", "127.0.0.1");
-        MeteorSingleton.createInstance(this, "ws://" + meteorIp + ":3000/websocket", new InMemoryDatabase());
-        mMeteor = MeteorSingleton.getInstance();
+        String meteorIp = prefs.getString("meteor_ip", "127.0.0.1:3000");
 
-        // register the callback that will handle events and receive messages
-        mMeteor.addCallback(this);
-
-        // establish the connection
-        mMeteor.connect();
-
-        if (ActivityCompat.checkSelfPermission(this,
-                Manifest.permission.READ_PHONE_STATE) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.READ_PHONE_STATE}, 1);
+        // Create a new Meteor instance
+        if (!MeteorSingleton.hasInstance()) {
+            MeteorSingleton.createInstance(this, "ws://" + meteorIp + "/websocket", new InMemoryDatabase());
         }
+        mMeteor = MeteorSingleton.getInstance();
+        mMeteor.addCallback(this);
+        mMeteor.connect();
+    }
 
-        TelephonyManager tManager = (TelephonyManager)getSystemService(Context.TELEPHONY_SERVICE);
-        String uuid = tManager.getDeviceId();
+    /**
+     * Take action when data is added on the Meteor server
+     *
+     * @param collectionName Name of the collection
+     * @param documentID Document that was added
+     * @param newValuesJson Values as JSON
+     */
+    public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
+        Log.d("MapsActivity", "Document added to " + collectionName + ": " + documentID);
+        Log.d("MapsActivity", "Data: " + newValuesJson);
+    }
 
-        database = mMeteor.getDatabase();
-        mMeteor.subscribe("SessionsList");
+    /**
+     * Take action when data is changed on the Meteor server
+     *
+     * @param collectionName Name of the collection
+     * @param documentID Document that was changed
+     * @param updatedValuesJson Modified values as JSON
+     * @param removedValuesJson Removed values as JSON
+     */
+    public void onDataChanged(String collectionName, String documentID,
+                              String updatedValuesJson, String removedValuesJson) {
+        Log.d("MapsActivity", "Document changed in " + collectionName + ": " + documentID);
+        Log.d("MapsActivity", "Updated: " + updatedValuesJson);
+        Log.d("MapsActivity", "Removed: " + removedValuesJson);
+    }
 
-        FloatingActionButton button = (FloatingActionButton) findViewById(R.id.btn_settings);
-        button.setOnClickListener(this);
+    /**
+     * Take action when data is removed on the Meteor server
+     *
+     * @param collectionName Name of the collection
+     * @param documentID Document that was removed
+     */
+    public void onDataRemoved(String collectionName, String documentID) {
+        Log.d("MapsActivity", "Document removed from " + collectionName + ": " + documentID);
+    }
+
+    public void onConnect(boolean signedInAutomatically) {
+        Log.d("MapsActivity", "Connected to Meteor");
+    }
+
+    public void onDisconnect() {
+        Log.d("MapsActivity", "Disconnected from Meteor");
+    }
+
+    public void onException(Exception e) {
+        Log.d("MapsActivity", "Received exception from Meteor: " + e.getMessage());
     }
 
     public void onClick(View v) {
-        if (v.getId() == R.id.btn_settings) {
-            Intent intent = new Intent(this, SettingsActivity.class);
-            startActivity(intent);
+        floatingMenu.collapse();
+
+        switch (v.getId()) {
+            case R.id.btn_settings:
+                // Open settings activity
+                startActivity(new Intent(this, SettingsActivity.class));
+                break;
+
+            case R.id.fab_start_session:
+                // Create the start session dialog
+                StartSession startSession = new StartSession();
+                startSession.show(getSupportFragmentManager(), startSession.getClass().getSimpleName());
+                break;
+
+            case R.id.btn_join_session:
+                // Create the join session dialog
+                JoinSession joinSession = new JoinSession();
+                joinSession.show(getSupportFragmentManager(), joinSession.getClass().getSimpleName());
+                break;
         }
     }
-
-    private void initializeCollections() {
-        if (sessions == null) {
-            sessions = database.getCollection("sessions");
-        }
-    }
-
-    private void updateSessionList() {
-        ArrayList<String> s = new ArrayList<>();
-        for (Document doc : sessions.find()) {
-            s.add(doc.getField("title").toString());
-        }
-
-        ArrayAdapter<String> adapter = new ArrayAdapter<>(this, R.layout.spinner_item, s);
-        adapter.setDropDownViewResource(android.R.layout.simple_spinner_dropdown_item);
-        sessionList.setAdapter(adapter);
-    }
-
-    public void onConnect(boolean signedInAutomatically) { }
-
-    public void onDisconnect() { }
-
-    public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
-        initializeCollections();
-        if (collectionName.equals(COLLECTION_SESSIONS)) {
-            updateSessionList();
-        }
-    }
-
-    public void onDataChanged(String collectionName, String documentID, String updatedValuesJson, String removedValuesJson) {
-        initializeCollections();
-        if (collectionName.equals(COLLECTION_SESSIONS)) {
-            updateSessionList();
-        }
-    }
-
-    public void onDataRemoved(String collectionName, String documentID) {
-        initializeCollections();
-        if (collectionName.equals(COLLECTION_SESSIONS)) {
-            updateSessionList();
-        }
-    }
-
-    public void onException(Exception e) { }
 
     @Override
     public void onDestroy() {
@@ -181,7 +190,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     public void onMapReady(GoogleMap googleMap) {
         mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
-        mUiSettings = mMap.getUiSettings();
+        UiSettings mUiSettings = mMap.getUiSettings();
 
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
@@ -223,12 +232,31 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     @Override
-    public void onSuccess() {
+    public void onSessionStarted(final String sessionName) {
+        Log.d("MapsActivity", "Creating new session \"" + sessionName + "\"...");
+        HashMap<String, Object> sessionData = new HashMap<>();
+        sessionData.put("title", sessionName);
 
+        mMeteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
+            @Override
+            public void onSuccess(String result) {
+                Log.i("MapsActivity", "Created Session \"" + sessionName + "\": " + result);
+                // TODO: Subscribe to the session
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e("MapsActivity", "Error creating session \"" + sessionName + "\"");
+                Log.e("MapsActivity", "Error: " + error);
+                Log.e("MapsActivity", "Reason: " + reason);
+                Log.e("MapsActivity", "Details: " + details);
+            }
+        });
     }
 
     @Override
-    public void onError(String error, String reason, String details) {
-
+    public void onSessionJoined(final String sessionName) {
+        Log.d("MapsActivity", "Joining session \"" + sessionName + "\"");
+        // TODO: Subscribe to the session
     }
 }
