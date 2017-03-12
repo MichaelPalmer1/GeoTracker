@@ -15,6 +15,7 @@ import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
 import im.delight.android.ddp.ResultListener;
+import im.delight.android.ddp.SubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -26,6 +27,7 @@ public class MeteorController implements MeteorCallback {
     private Meteor meteor;
     private Database database;
     private static String userId;
+    private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
 
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
@@ -33,10 +35,18 @@ public class MeteorController implements MeteorCallback {
 
     // GPS Data
     public static final String COLLECTION_GPS_DATA = "GPSData";
+    public static final String COLLECTION_GPS_DATA_COLUMN_SESSION_ID = "sessionID";
+    public static final String COLLECTION_GPS_DATA_COLUMN_USER_ID = "userID";
+    public static final String COLLECTION_GPS_DATA_COLUMN_LONGITUDE = "long";
+    public static final String COLLECTION_GPS_DATA_COLUMN_LATITUDE = "lat";
+    public static final String COLLECTION_GPS_DATA_COLUMN_ALTITUDE = "altitude";
+    public static final String COLLECTION_GPS_DATA_COLUMN_BEARING = "bearing";
+    public static final String COLLECTION_GPS_DATA_COLUMN_SPEED = "speed";
+    public static final String COLLECTION_GPS_DATA_COLUMN_TIME = "time";
 
     // Users
     public static final String COLLECTION_USERS = "Users";
-    public static final String COLLECTION_USERS_COLUMN_ID = "user";
+    public static final String COLLECTION_USERS_COLUMN_USER = "user";
 
     // Subscriptions
     public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
@@ -54,7 +64,7 @@ public class MeteorController implements MeteorCallback {
         // Get meteor url from preferences
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
-                prefs.getString("meteor_ip", "geotracker-web.herokuapp.com"));
+                prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
 
         // Create a new Meteor instance
         if (!MeteorSingleton.hasInstance()) {
@@ -67,11 +77,27 @@ public class MeteorController implements MeteorCallback {
         // Connect
         if (!meteor.isConnected()) {
             connect();
-            meteor.subscribe(SUBSCRIPTION_USERS);
         }
 
         // Store database in local variable
         database = meteor.getDatabase();
+
+        // Subscribe to users
+        meteor.subscribe(SUBSCRIPTION_USERS, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.i(getClass().getSimpleName(), "[Subscribe Users] Subscribed to " + SUBSCRIPTION_USERS);
+                initializeUser();
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(getClass().getSimpleName(), "[Subscribe Users] Error subscribing to " + SUBSCRIPTION_USERS);
+                Log.e(getClass().getSimpleName(), "[Subscribe Users] Error: " + error);
+                Log.e(getClass().getSimpleName(), "[Subscribe Users] Reason: " + reason);
+                Log.e(getClass().getSimpleName(), "[Subscribe Users] Details: " + details);
+            }
+        });
     }
 
     /**
@@ -113,26 +139,27 @@ public class MeteorController implements MeteorCallback {
      */
     private void initializeUser() {
         Collection cUsers = database.getCollection(COLLECTION_USERS);
-        Document user = cUsers.whereEqual(COLLECTION_USERS_COLUMN_ID, userId).findOne();
+        Document user = cUsers.whereEqual(COLLECTION_USERS_COLUMN_USER, userId).findOne();
         if (user == null) {
             HashMap<String, Object> userData = new HashMap<>();
-            userData.put(COLLECTION_USERS_COLUMN_ID, userId);
+            userData.put(COLLECTION_USERS_COLUMN_USER, userId);
             meteor.insert(COLLECTION_USERS, userData, new ResultListener() {
                 @Override
                 public void onSuccess(String result) {
-                    Log.i(getClass().getSimpleName(), "Created new user \"" + userId + "\": " + result);
+                    Log.i(getClass().getSimpleName(), "[InitializeUser] Created new user \"" + userId + "\": " +
+                            result);
                 }
 
                 @Override
                 public void onError(String error, String reason, String details) {
-                    Log.e(getClass().getSimpleName(), "Could not create user \"" + userId + "\"");
-                    Log.e(getClass().getSimpleName(), "Error: " + error);
-                    Log.e(getClass().getSimpleName(), "Reason: " + reason);
-                    Log.e(getClass().getSimpleName(), "Details: " + details);
+                    Log.e(getClass().getSimpleName(), "[InitializeUser] Could not create user \"" + userId + "\"");
+                    Log.e(getClass().getSimpleName(), "[InitializeUser] Error: " + error);
+                    Log.e(getClass().getSimpleName(), "[InitializeUser] Reason: " + reason);
+                    Log.e(getClass().getSimpleName(), "[InitializeUser] Details: " + details);
                 }
             });
         } else {
-            Log.i(getClass().getSimpleName(), "Found existing user: " + user);
+            Log.i(getClass().getSimpleName(), "[InitializeUser] Found existing user: " + user);
         }
     }
 
@@ -174,22 +201,23 @@ public class MeteorController implements MeteorCallback {
      * @param sessionName Name of the session
      */
     public void createSession(final String sessionName) {
-        Log.d(getClass().getSimpleName(), "Creating new session \"" + sessionName + "\"...");
+        Log.d(getClass().getSimpleName(), "[Create Session] Creating new session \"" + sessionName + "\"...");
         HashMap<String, Object> sessionData = new HashMap<>();
         sessionData.put(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName);
         meteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
             @Override
             public void onSuccess(String result) {
-                Log.i(getClass().getSimpleName(), "Created Session \"" + sessionName + "\": " + result);
+                Log.i(getClass().getSimpleName(),
+                        "[Create Session] Created Session \"" + sessionName + "\": " + result);
                 // TODO: Subscribe to the session
             }
 
             @Override
             public void onError(String error, String reason, String details) {
-                Log.e(getClass().getSimpleName(), "Error creating session \"" + sessionName + "\"");
-                Log.e(getClass().getSimpleName(), "Error: " + error);
-                Log.e(getClass().getSimpleName(), "Reason: " + reason);
-                Log.e(getClass().getSimpleName(), "Details: " + details);
+                Log.e(getClass().getSimpleName(), "[Create Session] Error creating session \"" + sessionName + "\"");
+                Log.e(getClass().getSimpleName(), "[Create Session] Error: " + error);
+                Log.e(getClass().getSimpleName(), "[Create Session] Reason: " + reason);
+                Log.e(getClass().getSimpleName(), "[Create Session] Details: " + details);
             }
         });
     }
@@ -215,15 +243,12 @@ public class MeteorController implements MeteorCallback {
      */
     public void joinSession(final String sessionName) {
         // TODO: Subscribe to the session
-        Log.d(getClass().getSimpleName(), "Joining session \"" + sessionName + "\"");
+        Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
     }
 
     @Override
     public void onConnect(boolean signedInAutomatically) {
         Log.d(getClass().getSimpleName(), "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
-
-        // Add user to Users collection
-        initializeUser();
     }
 
     @Override
