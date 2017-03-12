@@ -71,7 +71,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         // Get the Meteor server ip from settings
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        String meteorIp = prefs.getString("meteor_ip", "127.0.0.1:3000");
+        String meteorIp = prefs.getString("meteor_ip", "geotracker-web.herokuapp.com");
 
         // Create a new Meteor instance
         if (!MeteorSingleton.hasInstance()) {
