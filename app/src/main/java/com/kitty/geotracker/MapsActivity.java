@@ -2,17 +2,14 @@ package com.kitty.geotracker;
 
 import android.Manifest;
 import android.content.Intent;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationManager;
-import android.preference.PreferenceManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
-import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
@@ -28,28 +25,13 @@ import com.google.android.gms.maps.model.MarkerOptions;
 import com.kitty.geotracker.dialogs.JoinSession;
 import com.kitty.geotracker.dialogs.StartSession;
 
-import java.util.HashMap;
-
-import im.delight.android.ddp.Meteor;
-import im.delight.android.ddp.MeteorCallback;
-import im.delight.android.ddp.MeteorSingleton;
-import im.delight.android.ddp.ResultListener;
-import im.delight.android.ddp.db.memory.InMemoryDatabase;
-
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, MeteorCallback,
-        View.OnClickListener, StartSession.StartSessionListener, JoinSession.JoinSessionListener {
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, View.OnClickListener
+        /*JoinSession.JoinSessionListener*/ {
 
     private GoogleMap mMap;
     private LatLng myPosition;
-
     private FloatingActionsMenu floatingMenu;
-
-    // Meteor
-    private Meteor mMeteor;
-    public static final String COLLECTION_SESSIONS = "Sessions";
-    public static final String COLLECTION_SESSIONS2 = "sessions";
-    public static final String COLLECTION_GPS_DATA = "GPSData";
-    public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
+    private MeteorController meteorController;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -69,66 +51,12 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        // Get the Meteor server ip from settings
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        String meteorIp = prefs.getString("meteor_ip", "geotracker-web.herokuapp.com");
-
-        // Create a new Meteor instance
-        if (!MeteorSingleton.hasInstance()) {
-            MeteorSingleton.createInstance(this, "ws://" + meteorIp + "/websocket", new InMemoryDatabase());
+        // Create instance of our meteor controller
+        if (!MeteorController.hasInstance()) {
+            MeteorController.createInstance(this);
         }
-        mMeteor = MeteorSingleton.getInstance();
-        mMeteor.addCallback(this);
-        mMeteor.connect();
-    }
-
-    /**
-     * Take action when data is added on the Meteor server
-     *
-     * @param collectionName Name of the collection
-     * @param documentID Document that was added
-     * @param newValuesJson Values as JSON
-     */
-    public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
-        Log.d("MapsActivity", "Document added to " + collectionName + ": " + documentID);
-        Log.d("MapsActivity", "Data: " + newValuesJson);
-    }
-
-    /**
-     * Take action when data is changed on the Meteor server
-     *
-     * @param collectionName Name of the collection
-     * @param documentID Document that was changed
-     * @param updatedValuesJson Modified values as JSON
-     * @param removedValuesJson Removed values as JSON
-     */
-    public void onDataChanged(String collectionName, String documentID,
-                              String updatedValuesJson, String removedValuesJson) {
-        Log.d("MapsActivity", "Document changed in " + collectionName + ": " + documentID);
-        Log.d("MapsActivity", "Updated: " + updatedValuesJson);
-        Log.d("MapsActivity", "Removed: " + removedValuesJson);
-    }
-
-    /**
-     * Take action when data is removed on the Meteor server
-     *
-     * @param collectionName Name of the collection
-     * @param documentID Document that was removed
-     */
-    public void onDataRemoved(String collectionName, String documentID) {
-        Log.d("MapsActivity", "Document removed from " + collectionName + ": " + documentID);
-    }
-
-    public void onConnect(boolean signedInAutomatically) {
-        Log.d("MapsActivity", "Connected to Meteor");
-    }
-
-    public void onDisconnect() {
-        Log.d("MapsActivity", "Disconnected from Meteor");
-    }
-
-    public void onException(Exception e) {
-        Log.d("MapsActivity", "Received exception from Meteor: " + e.getMessage());
+        meteorController = MeteorController.getInstance();
+        meteorController.connect();
     }
 
     public void onClick(View v) {
@@ -156,8 +84,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     @Override
     public void onDestroy() {
-        mMeteor.disconnect();
-        mMeteor.removeCallback(this);
+        meteorController.disconnect();
         super.onDestroy();
     }
 
@@ -231,32 +158,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
-    @Override
-    public void onSessionStarted(final String sessionName) {
-        Log.d("MapsActivity", "Creating new session \"" + sessionName + "\"...");
-        HashMap<String, Object> sessionData = new HashMap<>();
-        sessionData.put("title", sessionName);
-
-        mMeteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
-            @Override
-            public void onSuccess(String result) {
-                Log.i("MapsActivity", "Created Session \"" + sessionName + "\": " + result);
-                // TODO: Subscribe to the session
-            }
-
-            @Override
-            public void onError(String error, String reason, String details) {
-                Log.e("MapsActivity", "Error creating session \"" + sessionName + "\"");
-                Log.e("MapsActivity", "Error: " + error);
-                Log.e("MapsActivity", "Reason: " + reason);
-                Log.e("MapsActivity", "Details: " + details);
-            }
-        });
-    }
-
-    @Override
-    public void onSessionJoined(final String sessionName) {
-        Log.d("MapsActivity", "Joining session \"" + sessionName + "\"");
-        // TODO: Subscribe to the session
-    }
+//    @Override
+//    public void onSessionJoined(final String sessionName) {
+//        meteorController.joinSession(sessionName);
+//    }
 }
