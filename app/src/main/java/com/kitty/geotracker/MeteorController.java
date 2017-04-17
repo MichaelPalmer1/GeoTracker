@@ -2,6 +2,7 @@ package com.kitty.geotracker;
 
 import android.content.Context;
 import android.content.SharedPreferences;
+import android.location.Location;
 import android.preference.PreferenceManager;
 import android.util.Log;
 
@@ -21,13 +22,20 @@ import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MeteorController implements MeteorCallback {
+public class MeteorController implements MeteorCallback, SubscribeListener {
 
     private static MeteorController mInstance;
     private Meteor meteor;
     private Database database;
     private static String userId;
+    private String session = null;
+    private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
+    private GPSListener mGPSListener = null;
+
+    // States
+    public static final int STATE_NO_SESSION = 0;
+    public static final int STATE_JOINED_SESSION = 1;
 
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
@@ -52,6 +60,10 @@ public class MeteorController implements MeteorCallback {
     public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
     public static final String SUBSCRIPTION_USERS = "Users";
 
+    public interface GPSListener {
+        public void onReceivedGPSData(final String documentID);
+    }
+
     /**
      * Initialize everything necessary to communicate with Meteor
      *
@@ -65,6 +77,8 @@ public class MeteorController implements MeteorCallback {
         SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
                 prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
+
+        mGPSListener = (GPSListener) context;
 
         // Create a new Meteor instance
         if (!MeteorSingleton.hasInstance()) {
@@ -164,6 +178,33 @@ public class MeteorController implements MeteorCallback {
     }
 
     /**
+     * Set the session state
+     *
+     * @param state Session state
+     */
+    public void setState(int state) {
+        this.state = state;
+    }
+
+    /**
+     * Get the current connection state with the server.
+     *
+     * @return Connection state
+     */
+    public int getState() {
+        return state;
+    }
+
+    /**
+     * Get the current session
+     *
+     * @return Session name
+     */
+    public String getSession() {
+        return session;
+    }
+
+    /**
      * Get user id
      *
      * @return User id
@@ -223,6 +264,14 @@ public class MeteorController implements MeteorCallback {
     }
 
     /**
+     * Clear the current session
+     */
+    public void clearSession() {
+        setState(STATE_NO_SESSION);
+        session = null;
+    }
+
+    /**
      * Get all sessions
      *
      * @return List of sessions
@@ -242,8 +291,32 @@ public class MeteorController implements MeteorCallback {
      * @param sessionName Session to join
      */
     public void joinSession(final String sessionName) {
-        // TODO: Subscribe to the session
         Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
+        meteor.subscribe(sessionName); // , new String[] { userId }, this);
+        setState(STATE_JOINED_SESSION);
+        session = sessionName;
+    }
+
+    /**
+     * Post location to Meteor
+     *
+     * @param location Location
+     */
+    public void postLocation(Location location) {
+        if (getState() != STATE_JOINED_SESSION || session == null) {
+            return;
+        }
+
+        HashMap<String, Object> data = new HashMap<>();
+        data.put(COLLECTION_GPS_DATA_COLUMN_SESSION_ID, session);
+        data.put(COLLECTION_GPS_DATA_COLUMN_USER_ID, userId);
+        data.put(COLLECTION_GPS_DATA_COLUMN_TIME, location.getTime());
+        data.put(COLLECTION_GPS_DATA_COLUMN_ALTITUDE, location.getAltitude());
+        data.put(COLLECTION_GPS_DATA_COLUMN_BEARING, location.getBearing());
+        data.put(COLLECTION_GPS_DATA_COLUMN_LATITUDE, location.getLatitude());
+        data.put(COLLECTION_GPS_DATA_COLUMN_LONGITUDE, location.getLongitude());
+        data.put(COLLECTION_GPS_DATA_COLUMN_SPEED, location.getSpeed());
+        meteor.insert(COLLECTION_GPS_DATA, data);
     }
 
     @Override
@@ -266,6 +339,11 @@ public class MeteorController implements MeteorCallback {
         Log.d(getClass().getSimpleName(),
                 String.format(Locale.US, "Document \"%s\" added to collection \"%s\"", documentID, collectionName));
         Log.d(getClass().getSimpleName(), "Data: " + newValuesJson);
+
+        if (collectionName.equals(COLLECTION_GPS_DATA) && state == STATE_JOINED_SESSION
+                && session != null && mGPSListener != null) {
+            mGPSListener.onReceivedGPSData(documentID);
+        }
     }
 
     @Override
@@ -281,5 +359,28 @@ public class MeteorController implements MeteorCallback {
     public void onDataRemoved(String collectionName, String documentID) {
         Log.d(getClass().getSimpleName(),
                 String.format(Locale.US, "Document \"%s\" removed from collection \"%s\"", documentID, collectionName));
+    }
+
+    /**
+     * Called on successful subscribe
+     */
+    @Override
+    public void onSuccess() {
+        Log.d(getClass().getSimpleName(), "Subscription successful.");
+    }
+
+    /**
+     * Called on failed subscribe
+     *
+     * @param error
+     * @param reason
+     * @param details
+     */
+    @Override
+    public void onError(String error, String reason, String details) {
+        Log.e(getClass().getSimpleName(), String.format(Locale.US,
+                "Subscription errored with error \"%s\" due to \"%s\": %s\"",
+                error, reason, details
+        ));
     }
 }

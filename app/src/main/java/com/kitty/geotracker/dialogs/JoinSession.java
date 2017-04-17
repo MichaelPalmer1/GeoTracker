@@ -1,5 +1,6 @@
 package com.kitty.geotracker.dialogs;
 
+import android.app.Activity;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
@@ -25,7 +26,7 @@ import im.delight.android.ddp.db.Document;
 
 public class JoinSession extends DialogFragment implements MeteorCallback, DialogInterface.OnClickListener {
 
-//    JoinSessionListener mListener;
+    JoinSessionListener mListener;
 
     private Meteor mMeteor;
     private Database database;
@@ -65,30 +66,30 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
     @Override
     public void onClick(DialogInterface dialog, int which) {
         Log.d(getClass().getSimpleName(), "Selected item " + String.valueOf(which));
-//        mListener.onSessionJoined(items.get(which));
         MeteorController.getInstance().joinSession(items.get(which));
+        mListener.onSessionJoined(items.get(which));
     }
 
-//    // Override the Fragment.onAttach() method to instantiate the JoinSessionListener
-//    @Override
-//    public void onAttach(Activity activity) {
-//        super.onAttach(activity);
-//        // Verify that the host activity implements the callback interface
-//        try {
-//            // Instantiate the JoinSessionListener so we can send events to the host
-//            mListener = (JoinSessionListener) activity;
-//        } catch (ClassCastException e) {
-//            // The activity doesn't implement the interface, throw exception
-//            throw new ClassCastException(activity.toString() + " must implement JoinSessionListener");
-//        }
-//    }
+    // Override the Fragment.onAttach() method to instantiate the JoinSessionListener
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        // Verify that the host activity implements the callback interface
+        try {
+            // Instantiate the JoinSessionListener so we can send events to the host
+            mListener = (JoinSessionListener) activity;
+        } catch (ClassCastException e) {
+            // The activity doesn't implement the interface, throw exception
+            throw new ClassCastException(activity.toString() + " must implement JoinSessionListener");
+        }
+    }
 
-//    /* The activity that creates an instance of this dialog fragment must
-//         * implement this interface in order to receive event callbacks.
-//         * Each method passes the DialogFragment in case the host needs to query it. */
-//    public interface JoinSessionListener {
-//        public void onSessionJoined(final String sessionName);
-//    }
+    /* The activity that creates an instance of this dialog fragment must
+         * implement this interface in order to receive event callbacks.
+         * Each method passes the DialogFragment in case the host needs to query it. */
+    public interface JoinSessionListener {
+        public void onSessionJoined(final String sessionName);
+    }
 
     private void refreshData() {
         Collection sessions = database.getCollection(MeteorController.COLLECTION_SESSIONS);

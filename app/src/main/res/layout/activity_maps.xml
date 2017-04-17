@@ -37,6 +37,7 @@
             app:fab_colorPressed="@color/white_pressed"/>
 
         <com.getbase.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_manage_session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
@@ -46,7 +47,7 @@
             app:fab_colorPressed="@color/white_pressed"/>
 
         <com.getbase.floatingactionbutton.FloatingActionButton
-            android:id="@+id/fab_start_session"
+            android:id="@+id/btn_start_session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
@@ -66,6 +67,7 @@
             app:fab_colorPressed="@color/white_pressed"/>
 
         <com.getbase.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_end_session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
@@ -75,6 +77,7 @@
             app:fab_colorPressed="@color/white_pressed"/>
 
         <com.getbase.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_leave_session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"

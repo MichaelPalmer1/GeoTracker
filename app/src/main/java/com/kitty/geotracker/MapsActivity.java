@@ -1,10 +1,11 @@
 package com.kitty.geotracker;
 
 import android.Manifest;
+import android.content.Context;
 import android.content.Intent;
 import android.content.pm.PackageManager;
-import android.location.Criteria;
 import android.location.Location;
+import android.location.LocationListener;
 import android.location.LocationManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
@@ -15,23 +16,28 @@ import android.widget.Toast;
 
 import com.getbase.floatingactionbutton.FloatingActionButton;
 import com.getbase.floatingactionbutton.FloatingActionsMenu;
-import com.google.android.gms.maps.CameraUpdateFactory;
 import com.google.android.gms.maps.GoogleMap;
 import com.google.android.gms.maps.OnMapReadyCallback;
 import com.google.android.gms.maps.SupportMapFragment;
 import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
+import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
 import com.kitty.geotracker.dialogs.JoinSession;
 import com.kitty.geotracker.dialogs.StartSession;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, View.OnClickListener
-        /*JoinSession.JoinSessionListener*/ {
+import java.util.HashMap;
+
+import im.delight.android.ddp.db.Document;
+
+public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, View.OnClickListener,
+        LocationListener, JoinSession.JoinSessionListener, MeteorController.GPSListener {
 
     private GoogleMap mMap;
-    private LatLng myPosition;
     private FloatingActionsMenu floatingMenu;
     private MeteorController meteorController;
+    private LocationManager locationManager;
+    private HashMap<String, Marker> mapMarkers = new HashMap<>();
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -41,10 +47,16 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         floatingMenu = (FloatingActionsMenu) findViewById(R.id.floatingMenu);
         FloatingActionButton btnSettings = (FloatingActionButton) findViewById(R.id.btn_settings);
         FloatingActionButton btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
-        FloatingActionButton btnStartSession = (FloatingActionButton) findViewById(R.id.fab_start_session);
+        FloatingActionButton btnStartSession = (FloatingActionButton) findViewById(R.id.btn_start_session);
+        FloatingActionButton btnLeaveSession = (FloatingActionButton) findViewById(R.id.btn_leave_session);
+        FloatingActionButton btnManageSession = (FloatingActionButton) findViewById(R.id.btn_manage_session);
+        FloatingActionButton btnEndSession = (FloatingActionButton) findViewById(R.id.btn_end_session);
         btnSettings.setOnClickListener(this);
         btnJoinSession.setOnClickListener(this);
         btnStartSession.setOnClickListener(this);
+        btnLeaveSession.setOnClickListener(this);
+        btnManageSession.setOnClickListener(this);
+        btnEndSession.setOnClickListener(this);
 
         // Get map fragment and register callback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -56,6 +68,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
             MeteorController.createInstance(this);
         }
         meteorController = MeteorController.getInstance();
+        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
     }
 
     public void onClick(View v) {
@@ -67,7 +80,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 startActivity(new Intent(this, SettingsActivity.class));
                 break;
 
-            case R.id.fab_start_session:
+            case R.id.btn_start_session:
                 // Create the start session dialog
                 StartSession startSession = new StartSession();
                 startSession.show(getSupportFragmentManager(), startSession.getClass().getSimpleName());
@@ -77,6 +90,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 // Create the join session dialog
                 JoinSession joinSession = new JoinSession();
                 joinSession.show(getSupportFragmentManager(), joinSession.getClass().getSimpleName());
+                break;
+
+            case R.id.btn_leave_session:
+                // Leave the session
+                leaveSession();
                 break;
         }
     }
@@ -129,36 +147,79 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         mUiSettings.setZoomControlsEnabled(true);
         mUiSettings.setCompassEnabled(true);
         mUiSettings.setMyLocationButtonEnabled(true);
-
-        // Getting LocationManager object from System Service LOCATION_SERVICE
-        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-
-        // Creating a criteria object to retrieve provider
-        Criteria criteria = new Criteria();
-
-        // Getting the name of the best provider
-        String provider = locationManager.getBestProvider(criteria, true);
-
-        // Getting Current Location
-        Location location = locationManager.getLastKnownLocation(provider);
-
-        if (location != null) {
-            // Getting latitude of the current location
-            double latitude = location.getLatitude();
-
-            // Getting longitude of the current location
-            double longitude = location.getLongitude();
-
-            myPosition = new LatLng(latitude, longitude);
-
-            mMap.addMarker(new MarkerOptions().position(myPosition).title("Charles"));
-
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(myPosition));
-        }
     }
 
-//    @Override
-//    public void onSessionJoined(final String sessionName) {
-//        meteorController.joinSession(sessionName);
-//    }
+    @Override
+    public void onLocationChanged(Location location) {
+        meteorController.postLocation(location);
+    }
+
+    @Override
+    public void onStatusChanged(String provider, int status, Bundle extras) {
+
+    }
+
+    @Override
+    public void onProviderEnabled(String provider) {
+
+    }
+
+    @Override
+    public void onProviderDisabled(String provider) {
+
+    }
+
+    @Override
+    public void onSessionJoined(final String sessionName) {
+        meteorController.joinSession(sessionName);
+
+        if (ActivityCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+
+            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+            return;
+        }
+        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, this);
+    }
+
+    public void leaveSession() {
+        locationManager.removeUpdates(this);
+        meteorController.clearSession();
+        meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+        mMap.clear();
+        mapMarkers.clear();
+    }
+
+    @Override
+    public void onReceivedGPSData(String documentID) {
+        Document document = meteorController.getMeteor()
+                .getDatabase()
+                .getCollection(MeteorController.COLLECTION_GPS_DATA)
+                .getDocument(documentID);
+
+        // Getting latitude of the current location
+        double latitude = Double.parseDouble(
+                document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LATITUDE).toString()
+        );
+
+        // Getting longitude of the current location
+        double longitude = Double.parseDouble(
+                document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LONGITUDE).toString()
+        );
+
+        LatLng location = new LatLng(latitude, longitude);
+
+        String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
+
+        if (mapMarkers.containsKey(userId)) {
+            Marker marker = mapMarkers.get(userId);
+            marker.setPosition(location);
+        } else {
+            Marker marker = mMap.addMarker(new MarkerOptions()
+                    .position(location)
+                    .title(userId)
+            );
+            mapMarkers.put(userId, marker);
+        }
+    }
 }
