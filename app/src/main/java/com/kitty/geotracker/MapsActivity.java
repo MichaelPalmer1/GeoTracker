@@ -153,11 +153,8 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Getting LocationManager object from System Service LOCATION_SERVICE
         LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
 
-        // Getting the name of the best provider
-        String provider = locationManager.getBestProvider(new Criteria(), true);
-
         // Getting Current Location
-        Location location = locationManager.getLastKnownLocation(provider);
+        Location location = locationManager.getLastKnownLocation(locationManager.getBestProvider(new Criteria(), true));
 
         if (location != null) {
             // Getting latitude of the current location
@@ -198,11 +195,13 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-
             ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 0);
             return;
         }
-        locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, 0, 0, this);
+
+        // Request location updates
+        Criteria criteria = new Criteria();
+        locationManager.requestLocationUpdates(locationManager.getBestProvider(criteria, true), 0, 0, this);
     }
 
     public void leaveSession() {
@@ -219,30 +218,33 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 .getDatabase()
                 .getCollection(MeteorController.COLLECTION_GPS_DATA)
                 .getDocument(documentID);
-
-        // Getting latitude of the current location
-        double latitude = Double.parseDouble(
-                document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LATITUDE).toString()
-        );
-
-        // Getting longitude of the current location
-        double longitude = Double.parseDouble(
-                document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LONGITUDE).toString()
-        );
-
-        LatLng location = new LatLng(latitude, longitude);
-
-        String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
-
-        if (mapMarkers.containsKey(userId)) {
-            Marker marker = mapMarkers.get(userId);
-            marker.setPosition(location);
-        } else {
-            Marker marker = mMap.addMarker(new MarkerOptions()
-                    .position(location)
-                    .title(userId)
+        try {
+            // Getting latitude of the current location
+            double latitude = Double.parseDouble(
+                    document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LATITUDE).toString()
             );
-            mapMarkers.put(userId, marker);
+
+            // Getting longitude of the current location
+            double longitude = Double.parseDouble(
+                    document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LONGITUDE).toString()
+            );
+
+            LatLng location = new LatLng(latitude, longitude);
+
+            String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
+
+            if (mapMarkers.containsKey(userId)) {
+                Marker marker = mapMarkers.get(userId);
+                marker.setPosition(location);
+            } else {
+                Marker marker = mMap.addMarker(new MarkerOptions()
+                        .position(location)
+                        .title(userId)
+                );
+                mapMarkers.put(userId, marker);
+            }
+        } catch (NullPointerException e) {
+            // Ignoring bad entry
         }
     }
 }
