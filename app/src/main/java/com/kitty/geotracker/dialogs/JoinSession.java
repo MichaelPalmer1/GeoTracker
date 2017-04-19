@@ -66,7 +66,6 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
     @Override
     public void onClick(DialogInterface dialog, int which) {
         Log.d(getClass().getSimpleName(), "Selected item " + String.valueOf(which));
-        MeteorController.getInstance().joinSession(items.get(which));
         mListener.onSessionJoined(items.get(which));
     }
 

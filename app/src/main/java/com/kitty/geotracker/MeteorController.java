@@ -44,6 +44,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
 
     // GPS Data
     public static final String COLLECTION_GPS_DATA = "GPSData";
+    public static final String COLLECTION_GPS_DATA_COLUMN_PROVIDER = "provider";
     public static final String COLLECTION_GPS_DATA_COLUMN_SESSION_ID = "sessionID";
     public static final String COLLECTION_GPS_DATA_COLUMN_USER_ID = "userID";
     public static final String COLLECTION_GPS_DATA_COLUMN_LONGITUDE = "long";
@@ -257,7 +258,8 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
                 Log.i(getClass().getSimpleName(),
                         "[Create Session] Created Session \"" + sessionName + "\": " + result);
                 meteor.subscribe(sessionName);
-                setState(STATE_CREATED_SESSION);
+                // TODO: Change this to STATE_CREATED_SESSION once we finish testing
+                setState(STATE_JOINED_SESSION);
                 session = sessionName;
             }
 
@@ -312,13 +314,14 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
      */
     public void postLocation(Location location) {
         // Only post location if the user is a member of a session (and not a session owner)
-        if (getState() != STATE_JOINED_SESSION || session == null) {
+        if (getState() != STATE_JOINED_SESSION || getSession() == null) {
             return;
         }
 
         HashMap<String, Object> data = new HashMap<>();
         data.put(COLLECTION_GPS_DATA_COLUMN_SESSION_ID, getSession());
         data.put(COLLECTION_GPS_DATA_COLUMN_USER_ID, getUserId());
+        data.put(COLLECTION_GPS_DATA_COLUMN_PROVIDER, location.getProvider());
         data.put(COLLECTION_GPS_DATA_COLUMN_TIME, location.getTime());
         data.put(COLLECTION_GPS_DATA_COLUMN_ALTITUDE, location.getAltitude());
         data.put(COLLECTION_GPS_DATA_COLUMN_BEARING, location.getBearing());
@@ -350,8 +353,11 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
         Log.d(getClass().getSimpleName(), "Data: " + newValuesJson);
 
         // Only trigger GPS data listener if the user created the session
-        if (collectionName.equals(COLLECTION_GPS_DATA) && getState() == STATE_CREATED_SESSION && getSession() != null) {
-            mGPSListener.onReceivedGPSData(documentID);
+        if (collectionName.equals(COLLECTION_GPS_DATA)) {
+            // TODO: Change this to STATE_CREATED_SESSION once we finish testing
+            if (getState() == STATE_JOINED_SESSION && getSession() != null) {
+                mGPSListener.onReceivedGPSData(documentID);
+            }
         }
     }
 
