@@ -35,7 +35,8 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
 
     // States
     public static final int STATE_NO_SESSION = 0;
-    public static final int STATE_JOINED_SESSION = 1;
+    public static final int STATE_CREATED_SESSION = 1;
+    public static final int STATE_JOINED_SESSION = 2;
 
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
@@ -78,7 +79,12 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
                 prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
 
-        mGPSListener = (GPSListener) context;
+        // Bind the GPS listener
+        if (context instanceof GPSListener) {
+            mGPSListener = (GPSListener) context;
+        } else {
+            throw new RuntimeException(context.toString() + " must implement GPSListener");
+        }
 
         // Create a new Meteor instance
         if (!MeteorSingleton.hasInstance()) {
@@ -250,7 +256,9 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
             public void onSuccess(String result) {
                 Log.i(getClass().getSimpleName(),
                         "[Create Session] Created Session \"" + sessionName + "\": " + result);
-                // TODO: Subscribe to the session
+                meteor.subscribe(sessionName);
+                setState(STATE_CREATED_SESSION);
+                session = sessionName;
             }
 
             @Override
@@ -292,7 +300,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
      */
     public void joinSession(final String sessionName) {
         Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
-        meteor.subscribe(sessionName); // , new String[] { userId }, this);
+        meteor.subscribe(sessionName);
         setState(STATE_JOINED_SESSION);
         session = sessionName;
     }
@@ -303,13 +311,14 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
      * @param location Location
      */
     public void postLocation(Location location) {
+        // Only post location if the user is a member of a session (and not a session owner)
         if (getState() != STATE_JOINED_SESSION || session == null) {
             return;
         }
 
         HashMap<String, Object> data = new HashMap<>();
-        data.put(COLLECTION_GPS_DATA_COLUMN_SESSION_ID, session);
-        data.put(COLLECTION_GPS_DATA_COLUMN_USER_ID, userId);
+        data.put(COLLECTION_GPS_DATA_COLUMN_SESSION_ID, getSession());
+        data.put(COLLECTION_GPS_DATA_COLUMN_USER_ID, getUserId());
         data.put(COLLECTION_GPS_DATA_COLUMN_TIME, location.getTime());
         data.put(COLLECTION_GPS_DATA_COLUMN_ALTITUDE, location.getAltitude());
         data.put(COLLECTION_GPS_DATA_COLUMN_BEARING, location.getBearing());
@@ -340,8 +349,8 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
                 String.format(Locale.US, "Document \"%s\" added to collection \"%s\"", documentID, collectionName));
         Log.d(getClass().getSimpleName(), "Data: " + newValuesJson);
 
-        if (collectionName.equals(COLLECTION_GPS_DATA) && state == STATE_JOINED_SESSION
-                && session != null && mGPSListener != null) {
+        // Only trigger GPS data listener if the user created the session
+        if (collectionName.equals(COLLECTION_GPS_DATA) && getState() == STATE_CREATED_SESSION && getSession() != null) {
             mGPSListener.onReceivedGPSData(documentID);
         }
     }
@@ -372,9 +381,9 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     /**
      * Called on failed subscribe
      *
-     * @param error
-     * @param reason
-     * @param details
+     * @param error Error code
+     * @param reason Reason
+     * @param details Details
      */
     @Override
     public void onError(String error, String reason, String details) {

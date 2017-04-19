@@ -169,8 +169,14 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
     }
 
+    /**
+     * Triggered on every location update.
+     *
+     * @param location Location
+     */
     @Override
     public void onLocationChanged(Location location) {
+        // Tell meteor about the location
         meteorController.postLocation(location);
     }
 
@@ -189,10 +195,17 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
     }
 
+    /**
+     * Triggered when a session has been selected in the Join Session dialog
+     *
+     * @param sessionName Session to join
+     */
     @Override
     public void onSessionJoined(final String sessionName) {
+        // Join the session
         meteorController.joinSession(sessionName);
 
+        // Confirm that permissions have been granted
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 0);
@@ -200,39 +213,55 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         }
 
         // Request location updates
-        Criteria criteria = new Criteria();
-        locationManager.requestLocationUpdates(locationManager.getBestProvider(criteria, true), 0, 0, this);
+        locationManager.requestLocationUpdates(locationManager.getBestProvider(new Criteria(), true), 0, 0, this);
     }
 
+    /**
+     * Leave a session
+     */
     public void leaveSession() {
+        // Stop location updates
         locationManager.removeUpdates(this);
-        meteorController.clearSession();
+
+        // Unsubscribe from the session
         meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+
+        // Clear data
+        meteorController.clearSession();
         mMap.clear();
         mapMarkers.clear();
     }
 
+    /**
+     * Triggered when GPS data is received from Meteor
+     *
+     * @param documentID GPS document that was received
+     */
     @Override
     public void onReceivedGPSData(String documentID) {
+        // Get the document
         Document document = meteorController.getMeteor()
                 .getDatabase()
                 .getCollection(MeteorController.COLLECTION_GPS_DATA)
                 .getDocument(documentID);
+
         try {
-            // Getting latitude of the current location
+            // Retrieve latitude
             double latitude = Double.parseDouble(
                     document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LATITUDE).toString()
             );
 
-            // Getting longitude of the current location
+            // Retrieve longitude
             double longitude = Double.parseDouble(
                     document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_LONGITUDE).toString()
             );
 
             LatLng location = new LatLng(latitude, longitude);
 
+            // Get the user's id
             String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
 
+            // Use existing marker for this user if it already exists, otherwise, create a new one.
             if (mapMarkers.containsKey(userId)) {
                 Marker marker = mapMarkers.get(userId);
                 marker.setPosition(location);
