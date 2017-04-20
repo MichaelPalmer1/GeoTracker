@@ -26,12 +26,12 @@ import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MeteorController implements MeteorCallback {
+public class MeteorController implements MeteorCallback, SharedPreferences.OnSharedPreferenceChangeListener {
 
     private static MeteorController mInstance;
     private Meteor meteor;
     private Database database;
-    private static String userId;
+    private static String userId, displayName;
     private String session = null, sessionDocumentId = null;
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
@@ -62,6 +62,7 @@ public class MeteorController implements MeteorCallback {
     // Users
     public static final String COLLECTION_USERS = "Users";
     public static final String COLLECTION_USERS_COLUMN_USER = "user";
+    public static final String COLLECTION_USERS_COLUMN_NAME = "name";
 
     // Subscriptions
     public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
@@ -77,11 +78,13 @@ public class MeteorController implements MeteorCallback {
      * @param context Context
      */
     private MeteorController(Context context) {
+        // Get meteor url from preferences
+        final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
+
         // Get user id and store it
         userId = InstanceID.getInstance(context).getId();
+        displayName = prefs.getString("display_name", null);
 
-        // Get meteor url from preferences
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
                 prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
 
@@ -114,6 +117,7 @@ public class MeteorController implements MeteorCallback {
             public void onSuccess() {
                 Log.i(getClass().getSimpleName(), "[Subscribe Users] Subscribed to " + SUBSCRIPTION_USERS);
                 initializeUser();
+                prefs.registerOnSharedPreferenceChangeListener(MeteorController.this);
             }
 
             @Override
@@ -169,6 +173,7 @@ public class MeteorController implements MeteorCallback {
         if (user == null) {
             HashMap<String, Object> userData = new HashMap<>();
             userData.put(COLLECTION_USERS_COLUMN_USER, userId);
+            userData.put(COLLECTION_USERS_COLUMN_NAME, displayName);
             meteor.insert(COLLECTION_USERS, userData, new ResultListener() {
                 @Override
                 public void onSuccess(String result) {
@@ -186,6 +191,48 @@ public class MeteorController implements MeteorCallback {
             });
         } else {
             Log.i(getClass().getSimpleName(), "[InitializeUser] Found existing user: " + user);
+            if (displayName != null) {
+                Log.d(getClass().getSimpleName(), "[InitializeUser] Changing display name");
+                changeDisplayName(displayName);
+            }
+        }
+    }
+
+    /**
+     * Add the user to the Users collection if they do not exist yet
+     */
+    private void changeDisplayName(String name) {
+        if (name == null) {
+            return;
+        }
+
+        Log.d(getClass().getSimpleName(), "Changing display name...");
+
+        Collection collection = database.getCollection(COLLECTION_USERS);
+        Document user = collection.whereEqual(COLLECTION_USERS_COLUMN_USER, userId).findOne();
+        if (user != null) {
+            HashMap<String, Object>
+                    query = new HashMap<>(),
+                    dataToUpdate = new HashMap<>(),
+                    data = new HashMap<>(),
+                    options = new HashMap<>();
+
+            // Build query
+            query.put("_id", user.getId());
+            data.put(COLLECTION_USERS_COLUMN_NAME, name);
+            dataToUpdate.put("$set", data);
+
+            meteor.update(COLLECTION_USERS, query, dataToUpdate, options, new ResultListener() {
+                @Override
+                public void onSuccess(String result) {
+                    Log.d(getClass().getSimpleName(), "Updated display name successfully");
+                }
+
+                @Override
+                public void onError(String error, String reason, String details) {
+                    Log.e(getClass().getSimpleName(), "Failed to update display name.");
+                }
+            });
         }
     }
 
@@ -441,5 +488,14 @@ public class MeteorController implements MeteorCallback {
     public void onDataRemoved(String collectionName, String documentID) {
         Log.d(getClass().getSimpleName(),
                 String.format(Locale.US, "Document \"%s\" removed from collection \"%s\"", documentID, collectionName));
+    }
+
+    @Override
+    public void onSharedPreferenceChanged(SharedPreferences sharedPreferences, String key) {
+        switch (key) {
+            case "display_name":
+                changeDisplayName(sharedPreferences.getString(key, null));
+                break;
+        }
     }
 }
