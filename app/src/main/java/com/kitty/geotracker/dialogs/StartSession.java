@@ -1,5 +1,6 @@
 package com.kitty.geotracker.dialogs;
 
+import android.app.Activity;
 import android.app.Dialog;
 import android.content.DialogInterface;
 import android.os.Bundle;
@@ -9,11 +10,12 @@ import android.support.v7.app.AlertDialog;
 import android.view.View;
 import android.widget.EditText;
 
-import com.kitty.geotracker.MeteorController;
 import com.kitty.geotracker.R;
 
 
 public class StartSession extends DialogFragment implements DialogInterface.OnClickListener {
+
+    private StartSessionListener mListener;
 
     @NonNull
     @Override
@@ -55,9 +57,27 @@ public class StartSession extends DialogFragment implements DialogInterface.OnCl
                     break;
                 }
 
-                MeteorController.getInstance().createSession(sessionName.getText().toString());
+                mListener.onSessionStarted(sessionName.getText().toString());
                 dismiss();
                 break;
         }
+    }
+
+    // Override the Fragment.onAttach() method to instantiate the StartSessionListener
+    @Override
+    public void onAttach(Activity activity) {
+        super.onAttach(activity);
+        // Verify that the host activity implements the callback interface
+        try {
+            // Instantiate the StartSessionListener so we can send events to the host
+            mListener = (StartSessionListener) activity;
+        } catch (ClassCastException e) {
+            // The activity doesn't implement the interface, throw exception
+            throw new ClassCastException(activity.toString() + " must implement StartSessionListener");
+        }
+    }
+
+    public interface StartSessionListener {
+        public void onSessionStarted(final String sessionName);
     }
 }

@@ -26,8 +26,7 @@ import im.delight.android.ddp.db.Document;
 
 public class JoinSession extends DialogFragment implements MeteorCallback, DialogInterface.OnClickListener {
 
-    JoinSessionListener mListener;
-
+    private JoinSessionListener mListener;
     private Meteor mMeteor;
     private Database database;
     private ArrayList<String> items = new ArrayList<>();
@@ -94,7 +93,7 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
         Collection sessions = database.getCollection(MeteorController.COLLECTION_SESSIONS);
         items.clear();
         documentMap.clear();
-        for (Document document : sessions.find()) {
+        for (Document document : sessions.whereEqual(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE, true).find()) {
             String title = document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
             items.add(title);
             documentMap.put(document.getId(), title);
@@ -117,6 +116,13 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
             Collection collection = database.getCollection(collectionName);
             if (!documentMap.containsKey(documentID)) {
                 Document document = collection.getDocument(documentID);
+                boolean active = (boolean) document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE);
+
+                // If this session is not active, don't add it to the list
+                if (!active) {
+                    return;
+                }
+
                 String title = document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
                 items.add(title);
                 documentMap.put(documentID, title);
@@ -143,13 +149,22 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
                               String removedValuesJson) {
         Log.d(getClass().getSimpleName(), "Data changed in " + collectionName + ": " + documentID);
         if (collectionName.equals(MeteorController.COLLECTION_SESSIONS)) {
-            String title = documentMap.get(documentID);
-            if (title != null) {
-                Collection collection = database.getCollection(collectionName);
-                String newTitle = collection.getDocument(documentID)
-                        .getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
-                items.set(items.indexOf(title), newTitle);
-                documentMap.put(documentID, newTitle);
+
+            Collection collection = database.getCollection(collectionName);
+            Document document = collection.getDocument(documentID);
+
+            boolean active = (boolean) document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE);
+            String title = (String) document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE);
+
+            if (active && !items.contains(title)) {
+                // Session becomes active
+                items.add(title);
+                documentMap.put(documentID, title);
+                adapter.notifyDataSetChanged();
+            } else if (!active && items.contains(title)) {
+                // Session becomes inactive
+                items.remove(title);
+                documentMap.remove(documentID);
                 adapter.notifyDataSetChanged();
             }
         }

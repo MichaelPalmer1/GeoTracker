@@ -12,6 +12,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
 
@@ -30,13 +31,20 @@ import com.kitty.geotracker.dialogs.StartSession;
 
 import java.util.HashMap;
 
+import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.db.Document;
 
-public class MapsActivity extends FragmentActivity implements OnMapReadyCallback, View.OnClickListener,
-        LocationListener, JoinSession.JoinSessionListener, MeteorController.GPSListener {
+public class MapsActivity extends FragmentActivity implements
+        OnMapReadyCallback,
+        View.OnClickListener,
+        LocationListener,
+        StartSession.StartSessionListener,
+        JoinSession.JoinSessionListener,
+        MeteorController.GPSListener {
 
     private GoogleMap mMap;
     private FloatingActionsMenu floatingMenu;
+    private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnManageSession, btnEndSession;
     private MeteorController meteorController;
     private LocationManager locationManager;
     private HashMap<String, Marker> mapMarkers = new HashMap<>();
@@ -48,11 +56,11 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
 
         floatingMenu = (FloatingActionsMenu) findViewById(R.id.floatingMenu);
         FloatingActionButton btnSettings = (FloatingActionButton) findViewById(R.id.btn_settings);
-        FloatingActionButton btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
-        FloatingActionButton btnStartSession = (FloatingActionButton) findViewById(R.id.btn_start_session);
-        FloatingActionButton btnLeaveSession = (FloatingActionButton) findViewById(R.id.btn_leave_session);
-        FloatingActionButton btnManageSession = (FloatingActionButton) findViewById(R.id.btn_manage_session);
-        FloatingActionButton btnEndSession = (FloatingActionButton) findViewById(R.id.btn_end_session);
+        btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
+        btnStartSession = (FloatingActionButton) findViewById(R.id.btn_start_session);
+        btnLeaveSession = (FloatingActionButton) findViewById(R.id.btn_leave_session);
+        btnManageSession = (FloatingActionButton) findViewById(R.id.btn_manage_session);
+        btnEndSession = (FloatingActionButton) findViewById(R.id.btn_end_session);
         btnSettings.setOnClickListener(this);
         btnJoinSession.setOnClickListener(this);
         btnStartSession.setOnClickListener(this);
@@ -98,6 +106,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
                 // Leave the session
                 leaveSession();
                 break;
+
+            case R.id.btn_end_session:
+                // End the session
+                endSession();
+                break;
+
+            case R.id.btn_manage_session:
+                // TODO: Implement this
+                break;
         }
     }
 
@@ -141,7 +158,7 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
 
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
             return;
         }
 
@@ -196,6 +213,34 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
     }
 
     /**
+     * Triggered when a session has been created in the Start Session dialog
+     *
+     * @param sessionName Name of the session that was created
+     */
+    @Override
+    public void onSessionStarted(String sessionName) {
+        // Create the session
+        meteorController.createSession(sessionName);
+
+        // Hide the start and join session buttons, show the end and manage session buttons.
+        btnStartSession.setVisibility(View.GONE);
+        btnJoinSession.setVisibility(View.GONE);
+        btnEndSession.setVisibility(View.VISIBLE);
+        btnManageSession.setVisibility(View.VISIBLE);
+
+        // TODO: Remove this. It's just here for testing purposes.
+        // Confirm that permissions have been granted
+        if (ActivityCompat.checkSelfPermission(this,
+                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+            return;
+        }
+
+        // Request location updates
+        locationManager.requestLocationUpdates(locationManager.getBestProvider(new Criteria(), true), 0, 0, this);
+    }
+
+    /**
      * Triggered when a session has been selected in the Join Session dialog
      *
      * @param sessionName Session to join
@@ -205,10 +250,15 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
         // Join the session
         meteorController.joinSession(sessionName);
 
+        // Hide the start and join session buttons, show the leave session button.
+        btnStartSession.setVisibility(View.GONE);
+        btnJoinSession.setVisibility(View.GONE);
+        btnLeaveSession.setVisibility(View.VISIBLE);
+
         // Confirm that permissions have been granted
         if (ActivityCompat.checkSelfPermission(this,
                 android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[] {Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
             return;
         }
 
@@ -220,16 +270,70 @@ public class MapsActivity extends FragmentActivity implements OnMapReadyCallback
      * Leave a session
      */
     public void leaveSession() {
+        // Hide the leave session button, show the start and join session buttons
+        btnStartSession.setVisibility(View.VISIBLE);
+        btnJoinSession.setVisibility(View.VISIBLE);
+        btnLeaveSession.setVisibility(View.GONE);
+
         // Stop location updates
         locationManager.removeUpdates(this);
 
         // Unsubscribe from the session
         meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+        meteorController.getMeteor().unsubscribe(meteorController.getSession());
 
         // Clear data
         meteorController.clearSession();
         mMap.clear();
         mapMarkers.clear();
+    }
+
+    /**
+     * End a session
+     */
+    public void endSession() {
+        HashMap<String, Object>
+                query = new HashMap<>(),
+                dataToUpdate = new HashMap<>(),
+                data = new HashMap<>(),
+                options = new HashMap<>();
+
+        // Hide/show buttons
+        btnStartSession.setVisibility(View.VISIBLE);
+        btnJoinSession.setVisibility(View.VISIBLE);
+        btnEndSession.setVisibility(View.GONE);
+        btnManageSession.setVisibility(View.GONE);
+
+        // Build query
+        query.put("_id", meteorController.getSessionDocumentId());
+        data.put(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
+        dataToUpdate.put("$set", data);
+
+        // Deactivate the session
+        meteorController.getMeteor().update(MeteorController.COLLECTION_SESSIONS, query, dataToUpdate, options,
+                new ResultListener() {
+                    @Override
+                    public void onSuccess(String result) {
+                        Log.d(getClass().getSimpleName(),
+                                "Session \"" + meteorController.getSession() + "\" " + "deactivated: " + result);
+                    }
+
+                    @Override
+                    public void onError(String error, String reason, String details) {
+                        Log.e(getClass().getSimpleName(),
+                                "Session \"" + meteorController.getSession() + "\" " + "failed to deactivate with " +
+                                        "error: \"" + error + "\", reason: \"" + reason +
+                                        "\", details: \"" + details + "\".");
+                    }
+                }
+        );
+
+        // Unsubscribe from the session
+        meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+        meteorController.getMeteor().unsubscribe(meteorController.getSession());
+
+        // Clear data
+        meteorController.clearSession();
     }
 
     /**

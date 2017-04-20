@@ -8,6 +8,10 @@ import android.util.Log;
 
 import com.google.android.gms.iid.InstanceID;
 
+import org.json.JSONArray;
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
@@ -28,7 +32,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     private Meteor meteor;
     private Database database;
     private static String userId;
-    private String session = null;
+    private String session = null, sessionDocumentId = null;
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
     private GPSListener mGPSListener = null;
@@ -41,6 +45,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
     public static final String COLLECTION_SESSIONS_COLUMN_TITLE = "title";
+    public static final String COLLECTION_SESSIONS_COLUMN_ACTIVE = "active";
 
     // GPS Data
     public static final String COLLECTION_GPS_DATA = "GPSData";
@@ -212,6 +217,15 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     }
 
     /**
+     * Get the document id of the current session
+     *
+     * @return Session document id
+     */
+    public String getSessionDocumentId() {
+        return sessionDocumentId;
+    }
+
+    /**
      * Get user id
      *
      * @return User id
@@ -252,15 +266,45 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
         Log.d(getClass().getSimpleName(), "[Create Session] Creating new session \"" + sessionName + "\"...");
         HashMap<String, Object> sessionData = new HashMap<>();
         sessionData.put(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName);
+        sessionData.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, true);
         meteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
             @Override
             public void onSuccess(String result) {
-                Log.i(getClass().getSimpleName(),
-                        "[Create Session] Created Session \"" + sessionName + "\": " + result);
-                meteor.subscribe(sessionName);
-                // TODO: Change this to STATE_CREATED_SESSION once we finish testing
-                setState(STATE_JOINED_SESSION);
-                session = sessionName;
+                Log.d("MeteorController", "[Create Session] Created Session \"" + sessionName + "\": " + result);
+
+                // Extract the session's document id
+                String id;
+                try {
+                    JSONObject jsonObject = new JSONObject(result);
+                    JSONArray insertedIds = jsonObject.getJSONArray("insertedIds");
+                    id = insertedIds.getString(0);
+                } catch (JSONException e) {
+                    id = null;
+                }
+
+                // Create a final variable to pass to the subscribe listener
+                final String documentId = id;
+
+                meteor.subscribe(sessionName, null, new SubscribeListener() {
+                    @Override
+                    public void onSuccess() {
+                        Log.d("MeteorController", "Subscribed to \"" + sessionName + "\" successfully");
+
+                        // TODO: Change this to STATE_CREATED_SESSION once we finish testing
+                        setState(STATE_JOINED_SESSION);
+                        session = sessionName;
+                        sessionDocumentId = documentId;
+                    }
+
+                    @Override
+                    public void onError(String error, String reason, String details) {
+                        Log.e(getClass().getSimpleName(),
+                                "[Subscribe to \"" + sessionName + "\"] Failed to subscribe.");
+                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Error: " + error);
+                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Reason: " + reason);
+                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Details: " + details);
+                    }
+                });
             }
 
             @Override
@@ -302,9 +346,28 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
      */
     public void joinSession(final String sessionName) {
         Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
-        meteor.subscribe(sessionName);
-        setState(STATE_JOINED_SESSION);
-        session = sessionName;
+        meteor.subscribe(sessionName, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(), "[Join Session] Session joined successfully.");
+                setState(STATE_JOINED_SESSION);
+                session = sessionName;
+                sessionDocumentId = getMeteor()
+                        .getDatabase()
+                        .getCollection(COLLECTION_SESSIONS)
+                        .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+                        .findOne()
+                        .getId();
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(getClass().getSimpleName(), "[Join Session] Failed to join session \"" + sessionName + "\"");
+                Log.e(getClass().getSimpleName(), "[Join Session] Error: " + error);
+                Log.e(getClass().getSimpleName(), "[Join Session] Reason: " + reason);
+                Log.e(getClass().getSimpleName(), "[Join Session] Details: " + details);
+            }
+        });
     }
 
     /**
@@ -387,8 +450,8 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     /**
      * Called on failed subscribe
      *
-     * @param error Error code
-     * @param reason Reason
+     * @param error   Error code
+     * @param reason  Reason
      * @param details Details
      */
     @Override
