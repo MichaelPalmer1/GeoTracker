@@ -26,10 +26,17 @@ import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
+import com.google.android.gms.maps.model.Tile;
+import com.google.android.gms.maps.model.TileOverlay;
+import com.google.android.gms.maps.model.TileOverlayOptions;
+import com.google.android.gms.maps.model.TileProvider;
+import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.kitty.geotracker.dialogs.JoinSession;
 import com.kitty.geotracker.dialogs.StartSession;
 
+import java.util.ArrayList;
 import java.util.HashMap;
+import java.util.List;
 
 import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.db.Document;
@@ -48,6 +55,11 @@ public class MapsActivity extends FragmentActivity implements
     private MeteorController meteorController;
     private LocationManager locationManager;
     private HashMap<String, Marker> mapMarkers = new HashMap<>();
+
+    ArrayList<LatLng> mapData = new ArrayList<>();
+    HeatmapTileProvider mProvider;
+    TileOverlay mOverlay;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -184,6 +196,7 @@ public class MapsActivity extends FragmentActivity implements
 
             mMap.moveCamera(CameraUpdateFactory.newLatLng(myPosition));
         }
+
     }
 
     /**
@@ -361,6 +374,21 @@ public class MapsActivity extends FragmentActivity implements
             );
 
             LatLng location = new LatLng(latitude, longitude);
+            mapData.add(location);
+
+            if (mProvider == null)
+            {
+                mProvider = new HeatmapTileProvider.Builder()
+                        .data(mapData)
+                        .build();
+
+                mProvider.setOpacity(.4);
+
+                mOverlay = mMap.addTileOverlay(new TileOverlayOptions().tileProvider(mProvider));
+            }
+
+            mProvider.setData(mapData);
+            mOverlay.clearTileCache();
 
             // Get the user's id
             String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
