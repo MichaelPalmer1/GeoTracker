@@ -6,7 +6,6 @@
     <!-- Session Actions -->
     <string name="start_session">Start Session</string>
     <string name="join_session">Join Session</string>
-    <string name="manage_session">Manage Session</string>
     <string name="leave_session">Leave Session</string>
 
     <string name="session_name">Session Name</string>

@@ -49,7 +49,7 @@ public class MapsActivity extends FragmentActivity implements
 
     private GoogleMap mMap;
     private FloatingActionsMenu floatingMenu;
-    private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnManageSession, btnEndSession;
+    private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnEndSession;
     private MeteorController meteorController;
     private LocationManager locationManager;
     private HashMap<String, Marker> mapMarkers = new HashMap<>();
@@ -69,13 +69,11 @@ public class MapsActivity extends FragmentActivity implements
         btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
         btnStartSession = (FloatingActionButton) findViewById(R.id.btn_start_session);
         btnLeaveSession = (FloatingActionButton) findViewById(R.id.btn_leave_session);
-        btnManageSession = (FloatingActionButton) findViewById(R.id.btn_manage_session);
         btnEndSession = (FloatingActionButton) findViewById(R.id.btn_end_session);
         btnSettings.setOnClickListener(this);
         btnJoinSession.setOnClickListener(this);
         btnStartSession.setOnClickListener(this);
         btnLeaveSession.setOnClickListener(this);
-        btnManageSession.setOnClickListener(this);
         btnEndSession.setOnClickListener(this);
 
         // Get map fragment and register callback
@@ -120,10 +118,6 @@ public class MapsActivity extends FragmentActivity implements
             case R.id.btn_end_session:
                 // End the session
                 endSession();
-                break;
-
-            case R.id.btn_manage_session:
-                // TODO: Implement this
                 break;
         }
     }
@@ -233,11 +227,10 @@ public class MapsActivity extends FragmentActivity implements
         // Create the session
         meteorController.createSession(sessionName);
 
-        // Hide the start and join session buttons, show the end and manage session buttons.
+        // Hide the start and join session buttons, show the end session button.
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
         btnEndSession.setVisibility(View.VISIBLE);
-        btnManageSession.setVisibility(View.VISIBLE);
 
         // TODO: Remove this. It's just here for testing purposes.
         // Confirm that permissions have been granted
@@ -324,7 +317,6 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setVisibility(View.VISIBLE);
         btnJoinSession.setVisibility(View.VISIBLE);
         btnEndSession.setVisibility(View.GONE);
-        btnManageSession.setVisibility(View.GONE);
 
         // Stop location updates
         locationManager.removeUpdates(this);

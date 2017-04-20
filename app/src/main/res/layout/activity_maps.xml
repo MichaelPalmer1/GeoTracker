@@ -37,17 +37,6 @@
             app:fab_colorPressed="@color/white_pressed"/>
 
         <com.getbase.floatingactionbutton.FloatingActionButton
-            android:id="@+id/btn_manage_session"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:visibility="gone"
-            app:fab_colorNormal="@color/white"
-            app:fab_size="mini"
-            app:fab_title="Manage Session"
-            app:fab_icon="@drawable/ic_build_black_24dp"
-            app:fab_colorPressed="@color/white_pressed"/>
-
-        <com.getbase.floatingactionbutton.FloatingActionButton
             android:id="@+id/btn_start_session"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
