@@ -26,17 +26,14 @@ import com.google.android.gms.maps.UiSettings;
 import com.google.android.gms.maps.model.LatLng;
 import com.google.android.gms.maps.model.Marker;
 import com.google.android.gms.maps.model.MarkerOptions;
-import com.google.android.gms.maps.model.Tile;
 import com.google.android.gms.maps.model.TileOverlay;
 import com.google.android.gms.maps.model.TileOverlayOptions;
-import com.google.android.gms.maps.model.TileProvider;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.kitty.geotracker.dialogs.JoinSession;
 import com.kitty.geotracker.dialogs.StartSession;
 
 import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 
 import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.db.Document;
