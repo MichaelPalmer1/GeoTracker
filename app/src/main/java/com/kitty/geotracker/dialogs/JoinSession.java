@@ -19,6 +19,8 @@ import java.util.HashMap;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
+import im.delight.android.ddp.SubscribeListener;
+import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -40,7 +42,17 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
         adapter = new ArrayAdapter<>(getActivity(), android.R.layout.simple_list_item_1, items);
         mMeteor = MeteorController.getInstance().getMeteor();
         mMeteor.addCallback(this);
-        mMeteor.subscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+        mMeteor.subscribe(MeteorController.SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(), "Subscribe to session successful");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(getClass().getSimpleName(), "Failed to subscribe to session");
+            }
+        });
         database = mMeteor.getDatabase();
         refreshData();
     }
@@ -48,7 +60,12 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
     @Override
     public void onDestroy() {
         Log.d(getClass().getSimpleName(), "OnDestroy: Unsubscribe from " + MeteorController.SUBSCRIPTION_SESSION_LIST);
-        mMeteor.unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
+        mMeteor.unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST, new UnsubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(), "[Join Session] Unsubscribed from session list successfully.");
+            }
+        });
         mMeteor.removeCallback(this);
         super.onDestroy();
     }

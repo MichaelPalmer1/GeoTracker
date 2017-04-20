@@ -36,6 +36,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import im.delight.android.ddp.ResultListener;
+import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Document;
 
 public class MapsActivity extends FragmentActivity implements
@@ -280,6 +281,8 @@ public class MapsActivity extends FragmentActivity implements
      * Leave a session
      */
     public void leaveSession() {
+        Log.d(getClass().getSimpleName(), "Leaving session...");
+
         // Hide the leave session button, show the start and join session buttons
         btnStartSession.setVisibility(View.VISIBLE);
         btnJoinSession.setVisibility(View.VISIBLE);
@@ -287,10 +290,17 @@ public class MapsActivity extends FragmentActivity implements
 
         // Stop location updates
         locationManager.removeUpdates(this);
+        Log.d(getClass().getSimpleName(), "Location updates stopped");
 
         // Unsubscribe from the session
-        meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
-        meteorController.getMeteor().unsubscribe(meteorController.getSession());
+        final String session = meteorController.getSession();
+        meteorController.getMeteor().unsubscribe(session, new UnsubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(),
+                        "Left and unsubscribed from session \"" + session + "\"");
+            }
+        });
 
         // Clear data
         meteorController.clearSession();
@@ -308,11 +318,17 @@ public class MapsActivity extends FragmentActivity implements
                 data = new HashMap<>(),
                 options = new HashMap<>();
 
+        Log.d(getClass().getSimpleName(), "Ending session...");
+
         // Hide/show buttons
         btnStartSession.setVisibility(View.VISIBLE);
         btnJoinSession.setVisibility(View.VISIBLE);
         btnEndSession.setVisibility(View.GONE);
         btnManageSession.setVisibility(View.GONE);
+
+        // Stop location updates
+        locationManager.removeUpdates(this);
+        Log.d(getClass().getSimpleName(), "Location updates stopped");
 
         // Build query
         query.put("_id", meteorController.getSessionDocumentId());
@@ -325,13 +341,13 @@ public class MapsActivity extends FragmentActivity implements
                     @Override
                     public void onSuccess(String result) {
                         Log.d(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "deactivated: " + result);
+                                "Session \"" + meteorController.getSession() + "\" " + "stopped: " + result);
                     }
 
                     @Override
                     public void onError(String error, String reason, String details) {
                         Log.e(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "failed to deactivate with " +
+                                "Session \"" + meteorController.getSession() + "\" " + "failed to stop with " +
                                         "error: \"" + error + "\", reason: \"" + reason +
                                         "\", details: \"" + details + "\".");
                     }
@@ -339,8 +355,14 @@ public class MapsActivity extends FragmentActivity implements
         );
 
         // Unsubscribe from the session
-        meteorController.getMeteor().unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST);
-        meteorController.getMeteor().unsubscribe(meteorController.getSession());
+        final String session = meteorController.getSession();
+        meteorController.getMeteor().unsubscribe(session, new UnsubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(),
+                        "Ended and unsubscribed from session \"" + session + "\"");
+            }
+        });
 
         // Clear data
         meteorController.clearSession();
@@ -390,19 +412,34 @@ public class MapsActivity extends FragmentActivity implements
             // Get the user's id
             String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
 
+            Document userDocument = meteorController
+                    .getMeteor()
+                    .getDatabase()
+                    .getCollection(MeteorController.COLLECTION_USERS)
+                    .whereEqual(MeteorController.COLLECTION_USERS_COLUMN_USER, userId)
+                    .findOne();
+
+            String displayName = null;
+            if (userDocument != null) {
+                displayName = (String) userDocument.getField(MeteorController.COLLECTION_USERS_COLUMN_NAME);
+            }
+
+            displayName = displayName != null ? displayName : userId;
+
             // Use existing marker for this user if it already exists, otherwise, create a new one.
             if (mapMarkers.containsKey(userId)) {
                 Marker marker = mapMarkers.get(userId);
                 marker.setPosition(location);
+                marker.setTitle(displayName);
             } else {
                 Marker marker = mMap.addMarker(new MarkerOptions()
                         .position(location)
-                        .title(userId)
+                        .title(displayName)
                 );
                 mapMarkers.put(userId, marker);
             }
         } catch (NullPointerException e) {
-            // Ignoring bad entry
+            Log.e(getClass().getSimpleName(), "Error on GPS data receipt: " + e.getMessage());
         }
     }
 }
