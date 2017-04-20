@@ -26,7 +26,7 @@ import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
 import im.delight.android.ddp.db.memory.InMemoryDatabase;
 
-public class MeteorController implements MeteorCallback, SubscribeListener {
+public class MeteorController implements MeteorCallback {
 
     private static MeteorController mInstance;
     private Meteor meteor;
@@ -323,6 +323,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     public void clearSession() {
         setState(STATE_NO_SESSION);
         session = null;
+        sessionDocumentId = null;
     }
 
     /**
@@ -346,18 +347,20 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
      */
     public void joinSession(final String sessionName) {
         Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
+        setState(STATE_JOINED_SESSION);
+        session = sessionName;
+        sessionDocumentId = meteor
+                .getDatabase()
+                .getCollection(COLLECTION_SESSIONS)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+                .findOne()
+                .getId();
+
+        // Subscribe to the session
         meteor.subscribe(sessionName, null, new SubscribeListener() {
             @Override
             public void onSuccess() {
                 Log.d(getClass().getSimpleName(), "[Join Session] Session joined successfully.");
-                setState(STATE_JOINED_SESSION);
-                session = sessionName;
-                sessionDocumentId = getMeteor()
-                        .getDatabase()
-                        .getCollection(COLLECTION_SESSIONS)
-                        .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
-                        .findOne()
-                        .getId();
             }
 
             @Override
@@ -366,6 +369,7 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
                 Log.e(getClass().getSimpleName(), "[Join Session] Error: " + error);
                 Log.e(getClass().getSimpleName(), "[Join Session] Reason: " + reason);
                 Log.e(getClass().getSimpleName(), "[Join Session] Details: " + details);
+                clearSession();
             }
         });
     }
@@ -437,28 +441,5 @@ public class MeteorController implements MeteorCallback, SubscribeListener {
     public void onDataRemoved(String collectionName, String documentID) {
         Log.d(getClass().getSimpleName(),
                 String.format(Locale.US, "Document \"%s\" removed from collection \"%s\"", documentID, collectionName));
-    }
-
-    /**
-     * Called on successful subscribe
-     */
-    @Override
-    public void onSuccess() {
-        Log.d(getClass().getSimpleName(), "Subscription successful.");
-    }
-
-    /**
-     * Called on failed subscribe
-     *
-     * @param error   Error code
-     * @param reason  Reason
-     * @param details Details
-     */
-    @Override
-    public void onError(String error, String reason, String details) {
-        Log.e(getClass().getSimpleName(), String.format(Locale.US,
-                "Subscription errored with error \"%s\" due to \"%s\": %s\"",
-                error, reason, details
-        ));
     }
 }
