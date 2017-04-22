@@ -17,6 +17,6 @@
         android:id="@+id/start_session_name"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
-        android:inputType="text" />
+        android:inputType="textCapWords" />
 
 </LinearLayout>
