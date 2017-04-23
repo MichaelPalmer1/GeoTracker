@@ -415,7 +415,11 @@ public class MapsActivity extends FragmentActivity implements
      */
     private void stopLocationUpdates() {
         Log.d(getClass().getSimpleName(), "Stopping location updates...");
-        stopService(serviceIntent);
+        try {
+            stopService(serviceIntent);
+        } catch (NullPointerException e) {
+            Log.e(getClass().getSimpleName(), "Failed to stop GPS Service. It may not be running.");
+        }
     }
 
     /**
