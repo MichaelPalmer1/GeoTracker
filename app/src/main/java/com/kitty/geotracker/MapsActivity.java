@@ -1,17 +1,15 @@
 package com.kitty.geotracker;
 
 import android.Manifest;
-import android.content.Context;
 import android.content.Intent;
-import android.content.pm.PackageManager;
 import android.location.Criteria;
 import android.location.Location;
-import android.location.LocationListener;
 import android.location.LocationManager;
 import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -39,20 +37,24 @@ import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Document;
 
+import static android.content.pm.PackageManager.PERMISSION_GRANTED;
+
 public class MapsActivity extends FragmentActivity implements
         OnMapReadyCallback,
         View.OnClickListener,
-        LocationListener,
         StartSession.StartSessionListener,
         JoinSession.JoinSessionListener,
-        MeteorController.GPSListener {
+        MeteorController.MeteorControllerListener {
 
     private GoogleMap mMap;
     private FloatingActionsMenu floatingMenu;
     private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnEndSession;
     private MeteorController meteorController;
-    private LocationManager locationManager;
     private HashMap<String, Marker> mapMarkers = new HashMap<>();
+    private Intent serviceIntent;
+
+    // Permission request codes
+    private static final int REQUEST_CODE_JOIN_SESSION = 0, REQUEST_CODE_CAMERA_OVERHEAD = 1;
 
     ArrayList<LatLng> mapData = new ArrayList<>();
     HeatmapTileProvider mProvider;
@@ -81,15 +83,15 @@ public class MapsActivity extends FragmentActivity implements
                 .findFragmentById(R.id.map);
         mapFragment.getMapAsync(this);
 
-        // Create instance of our meteor controller
+        // Create instance of meteor controller
         if (!MeteorController.hasInstance()) {
             MeteorController.createInstance(this);
         }
         meteorController = MeteorController.getInstance();
-        locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
     }
 
     public void onClick(View v) {
+        // Close the floating menu
         floatingMenu.collapse();
 
         switch (v.getId()) {
@@ -105,18 +107,26 @@ public class MapsActivity extends FragmentActivity implements
                 break;
 
             case R.id.btn_join_session:
-                // Create the join session dialog
-                JoinSession joinSession = new JoinSession();
-                joinSession.show(getSupportFragmentManager(), joinSession.getClass().getSimpleName());
+                // Request location permission
+                if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+                        PERMISSION_GRANTED) {
+                    ActivityCompat.requestPermissions(
+                            this,
+                            new String[]{Manifest.permission.ACCESS_FINE_LOCATION},
+                            REQUEST_CODE_JOIN_SESSION
+                    );
+                    return;
+                }
+
+                // Open the join session dialog
+                openJoinSessionDialog();
                 break;
 
             case R.id.btn_leave_session:
-                // Leave the session
                 leaveSession();
                 break;
 
             case R.id.btn_end_session:
-                // End the session
                 endSession();
                 break;
         }
@@ -124,22 +134,53 @@ public class MapsActivity extends FragmentActivity implements
 
     @Override
     public void onDestroy() {
+        Log.d(getClass().getSimpleName(), "onDestroy()");
+        stopLocationUpdates();
         meteorController.disconnect();
         super.onDestroy();
     }
 
     @Override
-    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+    protected void onPause() {
+        Log.d(getClass().getSimpleName(), "onPause()");
+        super.onPause();
+    }
 
-        if (requestCode != 0) {
-            return;
-        }
+    @Override
+    protected void onResume() {
+        Log.d(getClass().getSimpleName(), "onResume()");
+        super.onResume();
+    }
 
+    /**
+     * Callback for the result from requesting permissions.
+     *
+     * @param requestCode The request code
+     * @param permissions The requested permissions.
+     * @param results     The grant results for the corresponding permissions
+     */
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
+        super.onRequestPermissionsResult(requestCode, permissions, results);
         for (int i = 0; i < permissions.length; i++) {
-            if (permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION) && grantResults[i] != 0) {
-                // Permission denied - throw an error
-                Toast.makeText(this, "Location permission is required", Toast.LENGTH_LONG).show();
+            if (permissions[i].equals(Manifest.permission.ACCESS_FINE_LOCATION)) {
+                switch (requestCode) {
+                    case REQUEST_CODE_JOIN_SESSION:
+                        if (results[i] == PERMISSION_GRANTED) {
+                            // Open the join session dialog
+                            openJoinSessionDialog();
+                        } else {
+                            // Show error message
+                            Toast.makeText(this, R.string.location_permission_required, Toast.LENGTH_LONG).show();
+                        }
+                        break;
+
+                    case REQUEST_CODE_CAMERA_OVERHEAD:
+                        if (results[i] == PERMISSION_GRANTED) {
+                            moveCameraToMyLocation();
+                        }
+                        break;
+                }
             }
         }
     }
@@ -158,63 +199,53 @@ public class MapsActivity extends FragmentActivity implements
         mMap = googleMap;
         mMap.setMapType(GoogleMap.MAP_TYPE_HYBRID);
         UiSettings mUiSettings = mMap.getUiSettings();
+        mUiSettings.setMyLocationButtonEnabled(true);
+        mUiSettings.setZoomControlsEnabled(true);
+        mUiSettings.setCompassEnabled(true);
 
-        if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
+        // Check permissions
+        if (ActivityCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_FINE_LOCATION) !=
+                PERMISSION_GRANTED) {
+            ActivityCompat.requestPermissions(
+                    this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, REQUEST_CODE_CAMERA_OVERHEAD
+            );
             return;
         }
 
+        // Enable my location on the map
         mMap.setMyLocationEnabled(true);
-        mUiSettings.setZoomControlsEnabled(true);
-        mUiSettings.setCompassEnabled(true);
-        mUiSettings.setMyLocationButtonEnabled(true);
 
-        // Getting LocationManager object from System Service LOCATION_SERVICE
-        LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
-
-        // Getting Current Location
-        Location location = locationManager.getLastKnownLocation(locationManager.getBestProvider(new Criteria(), true));
-
-        if (location != null) {
-            // Getting latitude of the current location
-            double latitude = location.getLatitude();
-
-            // Getting longitude of the current location
-            double longitude = location.getLongitude();
-
-            LatLng myPosition = new LatLng(latitude, longitude);
-
-            mMap.moveCamera(CameraUpdateFactory.newLatLng(myPosition));
-        }
-
+        // Move camera overhead
+        moveCameraToMyLocation();
     }
 
     /**
-     * Triggered on every location update.
-     *
-     * @param location Location
+     * Move the camera to my location
      */
-    @Override
-    public void onLocationChanged(Location location) {
-        // Tell meteor about the location
-        meteorController.postLocation(location);
-    }
+    private void moveCameraToMyLocation() {
+        try {
+            // Make sure map has been defined
+            if (mMap == null) {
+                return;
+            }
 
-    @Override
-    public void onStatusChanged(String provider, int status, Bundle extras) {
+            // Enable my location
+            mMap.setMyLocationEnabled(true);
 
-    }
+            // Get current location
+            LocationManager locationManager = (LocationManager) getSystemService(LOCATION_SERVICE);
+            Location location =
+                    locationManager.getLastKnownLocation(locationManager.getBestProvider(new Criteria(), true));
 
-    @Override
-    public void onProviderEnabled(String provider) {
-
-    }
-
-    @Override
-    public void onProviderDisabled(String provider) {
-
+            if (location != null) {
+                // Move the camera
+                mMap.moveCamera(CameraUpdateFactory.newLatLng(
+                        new LatLng(location.getLatitude(), location.getLongitude())
+                ));
+            }
+        } catch (SecurityException e) {
+            // This should have been handled already
+        }
     }
 
     /**
@@ -231,17 +262,6 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
         btnEndSession.setVisibility(View.VISIBLE);
-
-        // TODO: Remove this. It's just here for testing purposes.
-        // Confirm that permissions have been granted
-        if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
-            return;
-        }
-
-        // Request location updates
-        locationManager.requestLocationUpdates(locationManager.getBestProvider(new Criteria(), true), 0, 0, this);
     }
 
     /**
@@ -251,6 +271,9 @@ public class MapsActivity extends FragmentActivity implements
      */
     @Override
     public void onSessionJoined(final String sessionName) {
+        // Start GPS service
+        startLocationUpdates();
+
         // Join the session
         meteorController.joinSession(sessionName);
 
@@ -258,16 +281,30 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
         btnLeaveSession.setVisibility(View.VISIBLE);
+    }
 
-        // Confirm that permissions have been granted
-        if (ActivityCompat.checkSelfPermission(this,
-                android.Manifest.permission.ACCESS_FINE_LOCATION) != PackageManager.PERMISSION_GRANTED) {
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.ACCESS_FINE_LOCATION}, 0);
-            return;
-        }
+    /**
+     * Called when the session is closed by the session manager
+     *
+     * @param sessionName Session name
+     */
+    @Override
+    public void onSessionClosed(String sessionName) {
+        Log.d(getClass().getSimpleName(), "Session \"" + sessionName + "\" has been closed");
+        leaveSession();
 
-        // Request location updates
-        locationManager.requestLocationUpdates(locationManager.getBestProvider(new Criteria(), true), 0, 0, this);
+        new AlertDialog.Builder(this)
+                .setMessage("Session manager has ended this session.")
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /**
+     * Show join session dialog
+     */
+    private void openJoinSessionDialog() {
+        JoinSession joinSession = new JoinSession();
+        joinSession.show(getSupportFragmentManager(), joinSession.getClass().getSimpleName());
     }
 
     /**
@@ -282,8 +319,7 @@ public class MapsActivity extends FragmentActivity implements
         btnLeaveSession.setVisibility(View.GONE);
 
         // Stop location updates
-        locationManager.removeUpdates(this);
-        Log.d(getClass().getSimpleName(), "Location updates stopped");
+        stopLocationUpdates();
 
         // Unsubscribe from the session
         final String session = meteorController.getSession();
@@ -311,53 +347,72 @@ public class MapsActivity extends FragmentActivity implements
                 data = new HashMap<>(),
                 options = new HashMap<>();
 
-        Log.d(getClass().getSimpleName(), "Ending session...");
-
-        // Hide/show buttons
-        btnStartSession.setVisibility(View.VISIBLE);
-        btnJoinSession.setVisibility(View.VISIBLE);
-        btnEndSession.setVisibility(View.GONE);
-
-        // Stop location updates
-        locationManager.removeUpdates(this);
-        Log.d(getClass().getSimpleName(), "Location updates stopped");
-
         // Build query
         query.put("_id", meteorController.getSessionDocumentId());
         data.put(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
         dataToUpdate.put("$set", data);
 
         // Deactivate the session
+        Log.d(getClass().getSimpleName(), "Ending session...");
         meteorController.getMeteor().update(MeteorController.COLLECTION_SESSIONS, query, dataToUpdate, options,
-                new ResultListener() {
-                    @Override
-                    public void onSuccess(String result) {
-                        Log.d(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "stopped: " + result);
-                    }
+            new ResultListener() {
+                @Override
+                public void onSuccess(String result) {
+                    Log.d(getClass().getSimpleName(),
+                            "Session \"" + meteorController.getSession() + "\" " + "stopped: " + result);
 
-                    @Override
-                    public void onError(String error, String reason, String details) {
-                        Log.e(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "failed to stop with " +
-                                        "error: \"" + error + "\", reason: \"" + reason +
-                                        "\", details: \"" + details + "\".");
-                    }
+                    // Unsubscribe from the session
+                    meteorController.getMeteor().unsubscribe(meteorController.getSession());
+
+                    // Clear data
+                    meteorController.clearSession();
+
+                    // Hide/show buttons
+                    btnStartSession.setVisibility(View.VISIBLE);
+                    btnJoinSession.setVisibility(View.VISIBLE);
+                    btnEndSession.setVisibility(View.GONE);
+
+                    // Show confirmation
+                    new AlertDialog.Builder(MapsActivity.this)
+                            .setMessage("Session has ended")
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
                 }
-        );
 
-        // Unsubscribe from the session
-        final String session = meteorController.getSession();
-        meteorController.getMeteor().unsubscribe(session, new UnsubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(),
-                        "Ended and unsubscribed from session \"" + session + "\"");
+                @Override
+                public void onError(String error, String reason, String details) {
+                    Log.e(getClass().getSimpleName(),
+                            "Session \"" + meteorController.getSession() + "\" " + "failed to stop with " +
+                                    "error: \"" + error + "\", reason: \"" + reason +
+                                    "\", details: \"" + details + "\".");
+
+                    // Show error
+                    new AlertDialog.Builder(MapsActivity.this)
+                            .setMessage("Failed to end session")
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                }
             }
-        });
+        );
+    }
 
-        // Clear data
-        meteorController.clearSession();
+    /**
+     * Start the location update service
+     */
+    private void startLocationUpdates() {
+        Log.d(getClass().getSimpleName(), "Starting location updates...");
+        if (serviceIntent == null) {
+            serviceIntent = new Intent(this, GPSService.class);
+        }
+        startService(serviceIntent);
+    }
+
+    /**
+     * Stop the location update service
+     */
+    private void stopLocationUpdates() {
+        Log.d(getClass().getSimpleName(), "Stopping location updates...");
+        stopService(serviceIntent);
     }
 
     /**
@@ -387,8 +442,7 @@ public class MapsActivity extends FragmentActivity implements
             LatLng location = new LatLng(latitude, longitude);
             mapData.add(location);
 
-            if (mProvider == null)
-            {
+            if (mProvider == null) {
                 mProvider = new HeatmapTileProvider.Builder()
                         .data(mapData)
                         .build();

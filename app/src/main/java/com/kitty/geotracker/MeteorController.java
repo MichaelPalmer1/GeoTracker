@@ -4,6 +4,7 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.preference.PreferenceManager;
+import android.support.v7.app.AlertDialog;
 import android.util.Log;
 
 import com.google.android.gms.iid.InstanceID;
@@ -12,7 +13,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 
@@ -35,7 +35,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     private String session = null, sessionDocumentId = null;
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
-    private GPSListener mGPSListener = null;
+    private MeteorControllerListener mListener = null;
+    private Context context;
+    private final String TAG = getClass().getSimpleName();
 
     // States
     public static final int STATE_NO_SESSION = 0;
@@ -68,8 +70,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
     public static final String SUBSCRIPTION_USERS = "Users";
 
-    public interface GPSListener {
+    public interface MeteorControllerListener {
         public void onReceivedGPSData(final String documentID);
+        public void onSessionClosed(String sessionName);
     }
 
     /**
@@ -78,6 +81,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      * @param context Context
      */
     private MeteorController(Context context) {
+        // Save context
+        this.context = context;
+
         // Get meteor url from preferences
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
@@ -88,11 +94,11 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
                 prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
 
-        // Bind the GPS listener
-        if (context instanceof GPSListener) {
-            mGPSListener = (GPSListener) context;
+        // Bind the meteor controller listener
+        if (context instanceof MeteorControllerListener) {
+            mListener = (MeteorControllerListener) context;
         } else {
-            throw new RuntimeException(context.toString() + " must implement GPSListener");
+            throw new RuntimeException(context.toString() + " must implement MeteorControllerListener");
         }
 
         // Create a new Meteor instance
@@ -115,17 +121,30 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         meteor.subscribe(SUBSCRIPTION_USERS, null, new SubscribeListener() {
             @Override
             public void onSuccess() {
-                Log.i(getClass().getSimpleName(), "[Subscribe Users] Subscribed to " + SUBSCRIPTION_USERS);
+                Log.i(TAG, "[Subscribe Users] Subscribed to " + SUBSCRIPTION_USERS);
                 initializeUser();
                 prefs.registerOnSharedPreferenceChangeListener(MeteorController.this);
             }
 
             @Override
             public void onError(String error, String reason, String details) {
-                Log.e(getClass().getSimpleName(), "[Subscribe Users] Error subscribing to " + SUBSCRIPTION_USERS);
-                Log.e(getClass().getSimpleName(), "[Subscribe Users] Error: " + error);
-                Log.e(getClass().getSimpleName(), "[Subscribe Users] Reason: " + reason);
-                Log.e(getClass().getSimpleName(), "[Subscribe Users] Details: " + details);
+                Log.e(TAG, "[Subscribe Users] Error subscribing to " + SUBSCRIPTION_USERS);
+                Log.e(TAG, "[Subscribe Users] Error: " + error);
+                Log.e(TAG, "[Subscribe Users] Reason: " + reason);
+                Log.e(TAG, "[Subscribe Users] Details: " + details);
+            }
+        });
+
+        // Subscribe to sessions
+        meteor.subscribe(SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(), "Subscribe to session list successful");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(getClass().getSimpleName(), "Failed to subscribe to session list");
             }
         });
     }
@@ -177,22 +196,21 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
             meteor.insert(COLLECTION_USERS, userData, new ResultListener() {
                 @Override
                 public void onSuccess(String result) {
-                    Log.i(getClass().getSimpleName(), "[InitializeUser] Created new user \"" + userId + "\": " +
-                            result);
+                    Log.i(TAG, "[InitializeUser] Created new user \"" + userId + "\": " + result);
                 }
 
                 @Override
                 public void onError(String error, String reason, String details) {
-                    Log.e(getClass().getSimpleName(), "[InitializeUser] Could not create user \"" + userId + "\"");
-                    Log.e(getClass().getSimpleName(), "[InitializeUser] Error: " + error);
-                    Log.e(getClass().getSimpleName(), "[InitializeUser] Reason: " + reason);
-                    Log.e(getClass().getSimpleName(), "[InitializeUser] Details: " + details);
+                    Log.e(TAG, "[InitializeUser] Could not create user \"" + userId + "\"");
+                    Log.e(TAG, "[InitializeUser] Error: " + error);
+                    Log.e(TAG, "[InitializeUser] Reason: " + reason);
+                    Log.e(TAG, "[InitializeUser] Details: " + details);
                 }
             });
         } else {
-            Log.i(getClass().getSimpleName(), "[InitializeUser] Found existing user: " + user);
+            Log.i(TAG, "[InitializeUser] Found existing user: " + user);
             if (displayName != null) {
-                Log.d(getClass().getSimpleName(), "[InitializeUser] Changing display name");
+                Log.d(TAG, "[InitializeUser] Changing display name");
                 changeDisplayName(displayName);
             }
         }
@@ -206,7 +224,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
             return;
         }
 
-        Log.d(getClass().getSimpleName(), "Changing display name...");
+        Log.d(TAG, "Changing display name...");
 
         Collection collection = database.getCollection(COLLECTION_USERS);
         Document user = collection.whereEqual(COLLECTION_USERS_COLUMN_USER, userId).findOne();
@@ -225,12 +243,12 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
             meteor.update(COLLECTION_USERS, query, dataToUpdate, options, new ResultListener() {
                 @Override
                 public void onSuccess(String result) {
-                    Log.d(getClass().getSimpleName(), "Updated display name successfully");
+                    Log.d(TAG, "Updated display name successfully");
                 }
 
                 @Override
                 public void onError(String error, String reason, String details) {
-                    Log.e(getClass().getSimpleName(), "Failed to update display name.");
+                    Log.e(TAG, "Failed to update display name.");
                 }
             });
         }
@@ -310,14 +328,14 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      * @param sessionName Name of the session
      */
     public void createSession(final String sessionName) {
-        Log.d(getClass().getSimpleName(), "[Create Session] Creating new session \"" + sessionName + "\"...");
+        Log.d(TAG, "[Create Session] Creating new session \"" + sessionName + "\"...");
         HashMap<String, Object> sessionData = new HashMap<>();
         sessionData.put(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName);
         sessionData.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, true);
         meteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
             @Override
             public void onSuccess(String result) {
-                Log.d("MeteorController", "[Create Session] Created Session \"" + sessionName + "\": " + result);
+                Log.d(TAG, "[Create Session] Created Session \"" + sessionName + "\": " + result);
 
                 // Extract the session's document id
                 String id;
@@ -332,34 +350,105 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 // Create a final variable to pass to the subscribe listener
                 final String documentId = id;
 
-                meteor.subscribe(sessionName, null, new SubscribeListener() {
+                // Update state
+                setState(STATE_CREATED_SESSION);
+                session = sessionName;
+                sessionDocumentId = documentId;
+
+                // Subscribe to the session list
+                Log.d(TAG, "Subscribing to session list");
+                meteor.subscribe(SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
                     @Override
                     public void onSuccess() {
-                        Log.d("MeteorController", "Subscribed to \"" + sessionName + "\" successfully");
+                        Log.d("SessionCreation", "Subscribed!");
+                        // Subscribe to the session
+                        meteor.subscribe(sessionName, null, new SubscribeListener() {
+                            @Override
+                            public void onSuccess() {
+                                Log.d(TAG, "Subscribed to \"" + sessionName + "\" successfully");
+                            }
 
-                        // TODO: Change this to STATE_CREATED_SESSION once we finish testing
-                        setState(STATE_JOINED_SESSION);
-                        session = sessionName;
-                        sessionDocumentId = documentId;
+                            @Override
+                            public void onError(String error, String reason, String details) {
+                                Log.e("StartSessionSubscribe",
+                                        "[Subscribe to \"" + sessionName + "\"] Failed to subscribe.");
+                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Error: " +
+                                        error);
+                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Reason: " +
+                                        reason);
+                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Details: " +
+                                        details);
+                                clearSession();
+
+                                // Show error dialog
+                                new AlertDialog.Builder(context)
+                                        .setMessage("Session subscription failed")
+                                        .setPositiveButton(android.R.string.ok, null)
+                                        .show();
+                            }
+                        });
+
+                        // We are done with this subscription, unsubscribing...
+                        meteor.unsubscribe(SUBSCRIPTION_SESSION_LIST);
                     }
 
                     @Override
                     public void onError(String error, String reason, String details) {
-                        Log.e(getClass().getSimpleName(),
-                                "[Subscribe to \"" + sessionName + "\"] Failed to subscribe.");
-                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Error: " + error);
-                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Reason: " + reason);
-                        Log.e(getClass().getSimpleName(), "[Subscribe to \"" + sessionName + "\"] Details: " + details);
+                        // We are done with this subscription, unsubscribing...
+                        meteor.unsubscribe(SUBSCRIPTION_SESSION_LIST);
                     }
                 });
             }
 
             @Override
             public void onError(String error, String reason, String details) {
-                Log.e(getClass().getSimpleName(), "[Create Session] Error creating session \"" + sessionName + "\"");
-                Log.e(getClass().getSimpleName(), "[Create Session] Error: " + error);
-                Log.e(getClass().getSimpleName(), "[Create Session] Reason: " + reason);
-                Log.e(getClass().getSimpleName(), "[Create Session] Details: " + details);
+                Log.e("CreateSession", "[Create Session] Error creating session \"" + sessionName + "\"");
+                Log.e("CreateSession", "[Create Session] Error: " + error);
+                Log.e("CreateSession", "[Create Session] Reason: " + reason);
+                Log.e("CreateSession", "[Create Session] Details: " + details);
+
+                // Show error dialog
+                new AlertDialog.Builder(context)
+                        .setMessage("Session creation failed")
+                        .setPositiveButton(android.R.string.ok, null)
+                        .show();
+            }
+        });
+    }
+
+    /**
+     * Join an existing session
+     *
+     * @param sessionName Session to join
+     */
+    public void joinSession(final String sessionName) {
+        Log.d(TAG, "[Join Session] Joining session \"" + sessionName + "\"");
+        setState(STATE_JOINED_SESSION);
+        session = sessionName;
+        sessionDocumentId = meteor
+                .getDatabase()
+                .getCollection(COLLECTION_SESSIONS)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+                .findOne()
+                .getId();
+
+        // Subscribe to the session
+        meteor.subscribe(sessionName, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "[Join Session] Session joined successfully.");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(TAG, "[Join Session] Failed to join session \"" + sessionName + "\"");
+                Log.e(TAG, "[Join Session] Error: " + error);
+                Log.e(TAG, "[Join Session] Reason: " + reason);
+                Log.e(TAG, "[Join Session] Details: " + details);
+                clearSession();
+                new AlertDialog.Builder(context)
+                        .setMessage("Failed to join session")
+                        .show();
             }
         });
     }
@@ -378,47 +467,8 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      *
      * @return List of sessions
      */
-    public ArrayList<String> getSessions() {
-        ArrayList<String> sessionList = new ArrayList<>();
-        for (Document document : database.getCollection(COLLECTION_SESSIONS).find()) {
-            String title = document.getField(COLLECTION_SESSIONS_COLUMN_TITLE).toString();
-            sessionList.add(title);
-        }
-        return sessionList;
-    }
-
-    /**
-     * Join an existing session
-     *
-     * @param sessionName Session to join
-     */
-    public void joinSession(final String sessionName) {
-        Log.d(getClass().getSimpleName(), "[Join Session] Joining session \"" + sessionName + "\"");
-        setState(STATE_JOINED_SESSION);
-        session = sessionName;
-        sessionDocumentId = meteor
-                .getDatabase()
-                .getCollection(COLLECTION_SESSIONS)
-                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
-                .findOne()
-                .getId();
-
-        // Subscribe to the session
-        meteor.subscribe(sessionName, null, new SubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(), "[Join Session] Session joined successfully.");
-            }
-
-            @Override
-            public void onError(String error, String reason, String details) {
-                Log.e(getClass().getSimpleName(), "[Join Session] Failed to join session \"" + sessionName + "\"");
-                Log.e(getClass().getSimpleName(), "[Join Session] Error: " + error);
-                Log.e(getClass().getSimpleName(), "[Join Session] Reason: " + reason);
-                Log.e(getClass().getSimpleName(), "[Join Session] Details: " + details);
-                clearSession();
-            }
-        });
+    public Document[] getSessions() {
+        return database.getCollection(COLLECTION_SESSIONS).whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, true).find();
     }
 
     /**
@@ -447,30 +497,29 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
 
     @Override
     public void onConnect(boolean signedInAutomatically) {
-        Log.d(getClass().getSimpleName(), "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
+        Log.d(TAG, "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
     }
 
     @Override
     public void onDisconnect() {
-        Log.d(getClass().getSimpleName(), "Disconnected from Meteor");
+        Log.d(TAG, "Disconnected from Meteor");
     }
 
     @Override
     public void onException(Exception e) {
-        Log.d(getClass().getSimpleName(), "Meteor error: " + e.getMessage());
+        Log.d(TAG, "Meteor error: " + e.getMessage());
     }
 
     @Override
     public void onDataAdded(String collectionName, String documentID, String newValuesJson) {
-        Log.d(getClass().getSimpleName(),
+        Log.d(TAG,
                 String.format(Locale.US, "Document \"%s\" added to collection \"%s\"", documentID, collectionName));
-        Log.d(getClass().getSimpleName(), "Data: " + newValuesJson);
+        Log.d(TAG, "Data: " + newValuesJson);
 
         // Only trigger GPS data listener if the user created the session
         if (collectionName.equals(COLLECTION_GPS_DATA)) {
-            // TODO: Change this to STATE_CREATED_SESSION once we finish testing
-            if (getState() == STATE_JOINED_SESSION && getSession() != null) {
-                mGPSListener.onReceivedGPSData(documentID);
+            if (getState() == STATE_CREATED_SESSION && getSession() != null) {
+                mListener.onReceivedGPSData(documentID);
             }
         }
     }
@@ -478,15 +527,29 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     @Override
     public void onDataChanged(String collectionName, String documentID,
                               String updatedValuesJson, String removedValuesJson) {
-        Log.d(getClass().getSimpleName(),
+        Log.d(TAG,
                 String.format(Locale.US, "Document \"%s\" changed in collection \"%s\"", documentID, collectionName));
-        Log.d(getClass().getSimpleName(), "Updated: " + updatedValuesJson);
-        Log.d(getClass().getSimpleName(), "Removed: " + removedValuesJson);
+        Log.d(TAG, "Updated: " + updatedValuesJson);
+        Log.d(TAG, "Removed: " + removedValuesJson);
+
+        if (collectionName.equals(COLLECTION_SESSIONS)) {
+
+            Collection collection = database.getCollection(collectionName);
+            Document document = collection.getDocument(documentID);
+
+            boolean active = (boolean) document.getField(COLLECTION_SESSIONS_COLUMN_ACTIVE);
+            String title = (String) document.getField(COLLECTION_SESSIONS_COLUMN_TITLE);
+
+            // Current session becomes inactive
+            if (getState() == STATE_JOINED_SESSION && !active && session.equals(title)) {
+                mListener.onSessionClosed(title);
+            }
+        }
     }
 
     @Override
     public void onDataRemoved(String collectionName, String documentID) {
-        Log.d(getClass().getSimpleName(),
+        Log.d(TAG,
                 String.format(Locale.US, "Document \"%s\" removed from collection \"%s\"", documentID, collectionName));
     }
 
