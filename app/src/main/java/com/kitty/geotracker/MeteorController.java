@@ -72,7 +72,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public interface MeteorControllerListener {
         void onReceivedGPSData(final String documentID);
         void onSessionClosed(String sessionName);
-        void onSessionMessage(String message);
+        void onSessionMessage(String message, boolean toast);
     }
 
     /**
@@ -352,44 +352,27 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 session = sessionName;
                 sessionDocumentId = documentId;
 
-                // Subscribe to the session list
-                Log.d(TAG, "Subscribing to session list");
-                meteor.subscribe(SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
+                // Subscribe to the session
+                meteor.subscribe(sessionName, null, new SubscribeListener() {
                     @Override
                     public void onSuccess() {
-                        Log.d("SessionCreation", "Subscribed!");
-                        // Subscribe to the session
-                        meteor.subscribe(sessionName, null, new SubscribeListener() {
-                            @Override
-                            public void onSuccess() {
-                                Log.d(TAG, "Subscribed to \"" + sessionName + "\" successfully");
-                            }
-
-                            @Override
-                            public void onError(String error, String reason, String details) {
-                                Log.e("StartSessionSubscribe",
-                                        "[Subscribe to \"" + sessionName + "\"] Failed to subscribe.");
-                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Error: " +
-                                        error);
-                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Reason: " +
-                                        reason);
-                                Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Details: " +
-                                        details);
-                                clearSession();
-
-                                // Show error dialog
-                                mListener.onSessionMessage("Session subscription failed");
-                            }
-                        });
-
-                        // We are done with this subscription, unsubscribing...
-                        meteor.unsubscribe(SUBSCRIPTION_SESSION_LIST);
+                        Log.d(TAG, "Subscribed to \"" + sessionName + "\" successfully");
                     }
 
                     @Override
                     public void onError(String error, String reason, String details) {
-                        // We are done with this subscription, unsubscribing...
-                        meteor.unsubscribe(SUBSCRIPTION_SESSION_LIST);
+                        Log.e("StartSessionSubscribe",
+                                "[Subscribe to \"" + sessionName + "\"] Failed to subscribe.");
+                        Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Error: " +
+                                error);
+                        Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Reason: " +
+                                reason);
+                        Log.e("StartSessionSubscribe", "[Subscribe to \"" + sessionName + "\"] Details: " +
+                                details);
+                        clearSession();
+
+                        // Show error dialog
+                        mListener.onSessionMessage("Session subscription failed", false);
                     }
                 });
             }
@@ -402,7 +385,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e("CreateSession", "[Create Session] Details: " + details);
 
                 // Show error dialog
-                mListener.onSessionMessage("Session creation failed");
+                mListener.onSessionMessage("Session creation failed", false);
             }
         });
     }
@@ -416,30 +399,30 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         Log.d(TAG, "[Join Session] Joining session \"" + sessionName + "\"");
         setState(STATE_JOINED_SESSION);
         session = sessionName;
-        sessionDocumentId = meteor
-                .getDatabase()
-                .getCollection(COLLECTION_SESSIONS)
-                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
-                .findOne()
-                .getId();
+//        sessionDocumentId = meteor
+//                .getDatabase()
+//                .getCollection(COLLECTION_SESSIONS)
+//                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+//                .findOne()
+//                .getId();
 
         // Subscribe to the session
-        meteor.subscribe(sessionName, null, new SubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "[Join Session] Session joined successfully.");
-            }
-
-            @Override
-            public void onError(String error, String reason, String details) {
-                Log.e(TAG, "[Join Session] Failed to join session \"" + sessionName + "\"");
-                Log.e(TAG, "[Join Session] Error: " + error);
-                Log.e(TAG, "[Join Session] Reason: " + reason);
-                Log.e(TAG, "[Join Session] Details: " + details);
-                clearSession();
-                mListener.onSessionMessage("Failed to join session");
-            }
-        });
+//        meteor.subscribe(sessionName, null, new SubscribeListener() {
+//            @Override
+//            public void onSuccess() {
+//                Log.d(TAG, "[Join Session] Session joined successfully.");
+//            }
+//
+//            @Override
+//            public void onError(String error, String reason, String details) {
+//                Log.e(TAG, "[Join Session] Failed to join session \"" + sessionName + "\"");
+//                Log.e(TAG, "[Join Session] Error: " + error);
+//                Log.e(TAG, "[Join Session] Reason: " + reason);
+//                Log.e(TAG, "[Join Session] Details: " + details);
+//                clearSession();
+//                mListener.onSessionMessage("Failed to join session", false);
+//            }
+//        });
     }
 
     /**
@@ -452,15 +435,16 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         }
 
         Log.d(TAG, "[Leave Session] Leaving session \"" + session + "\"");
+        clearSession();
 
-        // Unsubscribe from the session
-        meteor.unsubscribe(session, new UnsubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(TAG, "[Leave Session] Left session");
-                clearSession();
-            }
-        });
+//        // Unsubscribe from the session
+//        meteor.unsubscribe(session, new UnsubscribeListener() {
+//            @Override
+//            public void onSuccess() {
+//                Log.d(TAG, "[Leave Session] Left session");
+//                clearSession();
+//            }
+//        });
     }
 
     /**
@@ -470,6 +454,11 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         // Make sure this is the session creator and that the session exists
         if (getState() != STATE_CREATED_SESSION || session == null) {
             return;
+        }
+
+        // Make sure a connection is established
+        if (!meteor.isConnected()) {
+            meteor.reconnect();
         }
 
         HashMap<String, Object>
@@ -497,7 +486,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 clearSession();
 
                 // Show confirmation
-                mListener.onSessionMessage("Session has ended");
+                mListener.onSessionMessage("Session has ended", false);
             }
 
             @Override
@@ -506,7 +495,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[End Session] Error: " + error);
                 Log.e(TAG, "[End Session] Reason: " + reason);
                 Log.e(TAG, "[End Session] Details: " + details);
-                mListener.onSessionMessage("Failed to end session");
+                mListener.onSessionMessage("Failed to end session", false);
             }
         });
     }
@@ -536,8 +525,16 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      */
     public void postLocation(Location location) {
         // Only post location if the user is a member of a session (and not a session owner)
-        if (getState() != STATE_JOINED_SESSION || getSession() == null) {
+        if (getState() != STATE_JOINED_SESSION || session == null) {
             return;
+        }
+
+        mListener.onSessionMessage("Posting " + location.getProvider() + " data", true);
+
+        // Make sure there is a connection to Meteor
+        if (!meteor.isConnected()) {
+            Log.d(TAG, "[Post Location] Reconnecting to Meteor");
+            meteor.reconnect();
         }
 
         HashMap<String, Object> data = new HashMap<>();
@@ -556,16 +553,45 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     @Override
     public void onConnect(boolean signedInAutomatically) {
         Log.d(TAG, "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
+        mListener.onSessionMessage("Connected to Meteor", true);
+
+        // Try to restore subscription if it exists
+        if (getState() == STATE_CREATED_SESSION && session != null) {
+            // Subscribe to the session
+            meteor.subscribe(session, null, new SubscribeListener() {
+                @Override
+                public void onSuccess() {
+                    Log.d(TAG, "Resubscribed to \"" + session + "\" successfully");
+                }
+
+                @Override
+                public void onError(String error, String reason, String details) {
+                    Log.e(TAG,
+                            "[Resubscribe to \"" + session + "\"] Failed to resubscribe.");
+                    Log.e(TAG, "[Resubscribe to \"" + session + "\"] Error: " +
+                            error);
+                    Log.e(TAG, "[Resubscribe to \"" + session + "\"] Reason: " +
+                            reason);
+                    Log.e(TAG, "[Resubscribe to \"" + session + "\"] Details: " +
+                            details);
+
+                    // Show error dialog
+                    mListener.onSessionMessage("Session re-subscription failed", false);
+                }
+            });
+        }
     }
 
     @Override
     public void onDisconnect() {
         Log.d(TAG, "Disconnected from Meteor");
+        mListener.onSessionMessage("Disconnected from Meteor", true);
     }
 
     @Override
     public void onException(Exception e) {
         Log.d(TAG, "Meteor error: " + e.getMessage());
+        mListener.onSessionMessage("Meteor error: " + e.getMessage(), false);
     }
 
     @Override

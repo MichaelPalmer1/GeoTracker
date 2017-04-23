@@ -142,12 +142,21 @@ public class MapsActivity extends FragmentActivity implements
     protected void onPause() {
         Log.d(getClass().getSimpleName(), "onPause()");
         super.onPause();
+
+        if (meteorController.getState() == MeteorController.STATE_CREATED_SESSION) {
+            meteorController.disconnect();
+        }
     }
 
     @Override
     protected void onResume() {
         Log.d(getClass().getSimpleName(), "onResume()");
         super.onResume();
+
+        if (meteorController != null && !meteorController.getMeteor().isConnected()) {
+            Log.d(getClass().getSimpleName(), "Reconnecting...");
+            meteorController.getMeteor().reconnect();
+        }
     }
 
     /**
@@ -303,11 +312,15 @@ public class MapsActivity extends FragmentActivity implements
      * @param message Message
      */
     @Override
-    public void onSessionMessage(String message) {
-        new AlertDialog.Builder(this)
-                .setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+    public void onSessionMessage(String message, boolean toast) {
+        if (toast) {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        } else {
+            new AlertDialog.Builder(this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        }
     }
 
     /**
@@ -349,6 +362,11 @@ public class MapsActivity extends FragmentActivity implements
                 dataToUpdate = new HashMap<>(),
                 data = new HashMap<>(),
                 options = new HashMap<>();
+
+        // Make sure a connection is established
+        if (!meteorController.getMeteor().isConnected()) {
+            meteorController.getMeteor().reconnect();
+        }
 
         // Build query
         query.put("_id", meteorController.getSessionDocumentId());
