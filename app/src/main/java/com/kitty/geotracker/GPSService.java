@@ -17,7 +17,7 @@ public class GPSService extends Service implements LocationListener {
 
     private MeteorController meteorController;
     private LocationManager locationManager;
-    private static final long UPDATE_INTERVAL = 1000;
+    private static final long MIN_UPDATE_INTERVAL = 1000; // in milliseconds
 
     @Override
     public void onCreate() {
@@ -46,7 +46,7 @@ public class GPSService extends Service implements LocationListener {
         Log.d(getClass().getSimpleName(), "Start command called.");
         try {
             locationManager.requestLocationUpdates(
-                    locationManager.getBestProvider(new Criteria(), true), UPDATE_INTERVAL, 0, this);
+                    locationManager.getBestProvider(new Criteria(), true), MIN_UPDATE_INTERVAL, 0, this);
             Log.d(getClass().getSimpleName(), "Location updates started in service");
             return super.onStartCommand(intent, flags, startId);
         } catch (SecurityException e) {
