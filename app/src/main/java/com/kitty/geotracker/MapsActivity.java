@@ -298,12 +298,12 @@ public class MapsActivity extends FragmentActivity implements
     }
 
     /**
-     * Called when the meteor controller encounters a session error.
+     * Called when the meteor controller received a informational or error message.
      *
-     * @param message Error message
+     * @param message Message
      */
     @Override
-    public void onSessionError(String message) {
+    public void onSessionMessage(String message) {
         new AlertDialog.Builder(this)
                 .setMessage(message)
                 .setPositiveButton(android.R.string.ok, null)

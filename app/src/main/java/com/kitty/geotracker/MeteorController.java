@@ -72,7 +72,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public interface MeteorControllerListener {
         void onReceivedGPSData(final String documentID);
         void onSessionClosed(String sessionName);
-        void onSessionError(String message);
+        void onSessionMessage(String message);
     }
 
     /**
@@ -378,7 +378,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                                 clearSession();
 
                                 // Show error dialog
-                                mListener.onSessionError("Session subscription failed");
+                                mListener.onSessionMessage("Session subscription failed");
                             }
                         });
 
@@ -402,7 +402,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e("CreateSession", "[Create Session] Details: " + details);
 
                 // Show error dialog
-                mListener.onSessionError("Session creation failed");
+                mListener.onSessionMessage("Session creation failed");
             }
         });
     }
@@ -437,7 +437,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[Join Session] Reason: " + reason);
                 Log.e(TAG, "[Join Session] Details: " + details);
                 clearSession();
-                mListener.onSessionError("Failed to join session");
+                mListener.onSessionMessage("Failed to join session");
             }
         });
     }
@@ -459,6 +459,54 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
             public void onSuccess() {
                 Log.d(TAG, "[Leave Session] Left session");
                 clearSession();
+            }
+        });
+    }
+
+    /**
+     * End the current session
+     */
+    public void endSession() {
+        // Make sure this is the session creator and that the session exists
+        if (getState() != STATE_CREATED_SESSION || session == null) {
+            return;
+        }
+
+        HashMap<String, Object>
+                query = new HashMap<>(),
+                dataToUpdate = new HashMap<>(),
+                data = new HashMap<>(),
+                options = new HashMap<>();
+
+        // Build query
+        query.put("_id", sessionDocumentId);
+        data.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
+        dataToUpdate.put("$set", data);
+
+        // Deactivate the session
+        Log.d(TAG, "[End Session] Ending session...");
+        meteor.update(COLLECTION_SESSIONS, query, dataToUpdate, options, new ResultListener() {
+            @Override
+            public void onSuccess(String result) {
+                Log.d(TAG, "[End Session] Session \"" + session + "\" ended: " + result);
+
+                // Unsubscribe from the session
+                meteor.unsubscribe(session);
+
+                // Clear data
+                clearSession();
+
+                // Show confirmation
+                mListener.onSessionMessage("Session has ended");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(TAG, "[End Session] Error ending session \"" + session + "\"");
+                Log.e(TAG, "[End Session] Error: " + error);
+                Log.e(TAG, "[End Session] Reason: " + reason);
+                Log.e(TAG, "[End Session] Details: " + details);
+                mListener.onSessionMessage("Failed to end session");
             }
         });
     }
