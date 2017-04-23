@@ -19,8 +19,6 @@ import java.util.HashMap;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
-import im.delight.android.ddp.SubscribeListener;
-import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -50,7 +48,6 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
 
     @Override
     public void onDestroy() {
-        Log.d(getClass().getSimpleName(), "OnDestroy: Unsubscribe from " + MeteorController.SUBSCRIPTION_SESSION_LIST);
         mMeteor.removeCallback(this);
         super.onDestroy();
     }
