@@ -529,9 +529,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 .findOne();
 
         if (document == null) {
-            new AlertDialog.Builder(context)
-                    .setMessage("Session cannot be viewed")
-                    .show();
+            mListener.onSessionMessage("Session cannot be viewed");
             return;
         }
 
@@ -549,9 +547,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[View Session] Reason: " + reason);
                 Log.e(TAG, "[View Session] Details: " + details);
                 clearSession();
-                new AlertDialog.Builder(context)
-                        .setMessage("Failed to view session")
-                        .show();
+                mListener.onSessionMessage("Failed to view session");
             }
         });
     }
