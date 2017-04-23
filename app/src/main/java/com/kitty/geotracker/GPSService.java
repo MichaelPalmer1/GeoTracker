@@ -58,13 +58,12 @@ public class GPSService extends Service implements LocationListener {
     @Nullable
     @Override
     public IBinder onBind(Intent intent) {
-        Log.d(getClass().getSimpleName(), "onBind()");
         return null;
     }
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.d(getClass().getSimpleName(), "Service posting location to Meteor: " + location.toString());
+        Log.d(getClass().getSimpleName(), "Service received location: " + location.toString());
         meteorController.postLocation(location);
     }
 

@@ -6,6 +6,7 @@
     <!-- Session Actions -->
     <string name="start_session">Start Session</string>
     <string name="join_session">Join Session</string>
+    <string name="view_session">View Session</string>
     <string name="leave_session">Leave Session</string>
 
     <string name="session_name">Session Name</string>
@@ -15,5 +16,6 @@
     <string name="pref_title_meteor_ip">Meteor IP</string>
 
     <string name="location_permission_required">Location permission is required</string>
+    <string name="end_session">End Session</string>
 
 </resources>

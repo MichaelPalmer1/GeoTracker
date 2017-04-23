@@ -43,6 +43,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public static final int STATE_NO_SESSION = 0;
     public static final int STATE_CREATED_SESSION = 1;
     public static final int STATE_JOINED_SESSION = 2;
+    public static final int STATE_VIEWING_SESSION = 3;
 
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
@@ -454,6 +455,50 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     }
 
     /**
+     * View a finished session
+     *
+     * @param sessionName Session to view
+     */
+    public void viewSession(final String sessionName) {
+        Log.d(TAG, "[View Session] Viewing session \"" + sessionName + "\"");
+        setState(STATE_VIEWING_SESSION);
+        session = sessionName;
+        Document document = meteor
+                .getDatabase()
+                .getCollection(COLLECTION_SESSIONS)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, false)
+                .findOne();
+
+        if (document == null) {
+            new AlertDialog.Builder(context)
+                    .setMessage("Session cannot be viewed")
+                    .show();
+            return;
+        }
+
+        // Subscribe to the session
+        meteor.subscribe(sessionName, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "[View Session] Session viewing successfully.");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(TAG, "[View Session] Failed to view session \"" + sessionName + "\"");
+                Log.e(TAG, "[View Session] Error: " + error);
+                Log.e(TAG, "[View Session] Reason: " + reason);
+                Log.e(TAG, "[View Session] Details: " + details);
+                clearSession();
+                new AlertDialog.Builder(context)
+                        .setMessage("Failed to view session")
+                        .show();
+            }
+        });
+    }
+
+    /**
      * Clear the current session
      */
     public void clearSession() {
@@ -468,7 +513,17 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      * @return List of sessions
      */
     public Document[] getSessions() {
-        return database.getCollection(COLLECTION_SESSIONS).whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, true).find();
+        return getSessions(true);
+    }
+
+    /**
+     * Get all sessions
+     *
+     * @param active Whether the session is active
+     * @return Session list
+     */
+    public Document[] getSessions(boolean active) {
+        return database.getCollection(COLLECTION_SESSIONS).whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, active).find();
     }
 
     /**
@@ -478,7 +533,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      */
     public void postLocation(Location location) {
         // Only post location if the user is a member of a session (and not a session owner)
-        if (getState() != STATE_JOINED_SESSION || getSession() == null) {
+        if (getState() != STATE_JOINED_SESSION || getState() != STATE_VIEWING_SESSION || getSession() == null) {
             return;
         }
 
@@ -518,7 +573,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
 
         // Only trigger GPS data listener if the user created the session
         if (collectionName.equals(COLLECTION_GPS_DATA)) {
-            if (getState() == STATE_CREATED_SESSION && getSession() != null) {
+            if ((getState() == STATE_CREATED_SESSION || getState() == STATE_VIEWING_SESSION) && getSession() != null) {
                 mListener.onReceivedGPSData(documentID);
             }
         }
