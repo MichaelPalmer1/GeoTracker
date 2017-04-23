@@ -1,14 +1,11 @@
 package com.kitty.geotracker;
 
 import android.content.Context;
-import android.content.DialogInterface;
 import android.content.SharedPreferences;
 import android.location.Location;
-import android.os.Handler;
 import android.preference.PreferenceManager;
 import android.support.v7.app.AlertDialog;
 import android.util.Log;
-import android.widget.Toast;
 
 import com.google.android.gms.iid.InstanceID;
 
@@ -16,7 +13,6 @@ import org.json.JSONArray;
 import org.json.JSONException;
 import org.json.JSONObject;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.Locale;
 
@@ -39,7 +35,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     private String session = null, sessionDocumentId = null;
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
-    private GPSListener mGPSListener = null;
+    private MeteorControllerListener mListener = null;
     private Context context;
     private final String TAG = getClass().getSimpleName();
 
@@ -74,8 +70,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public static final String SUBSCRIPTION_SESSION_LIST = "SessionsList";
     public static final String SUBSCRIPTION_USERS = "Users";
 
-    public interface GPSListener {
+    public interface MeteorControllerListener {
         public void onReceivedGPSData(final String documentID);
+        public void onSessionClosed(String sessionName);
     }
 
     /**
@@ -97,11 +94,11 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         String meteorUrl = String.format(Locale.US, "ws://%s/websocket",
                 prefs.getString("meteor_ip", DEFAULT_METEOR_URL));
 
-        // Bind the GPS listener
-        if (context instanceof GPSListener) {
-            mGPSListener = (GPSListener) context;
+        // Bind the meteor controller listener
+        if (context instanceof MeteorControllerListener) {
+            mListener = (MeteorControllerListener) context;
         } else {
-            throw new RuntimeException(context.toString() + " must implement GPSListener");
+            throw new RuntimeException(context.toString() + " must implement MeteorControllerListener");
         }
 
         // Create a new Meteor instance
@@ -135,6 +132,19 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[Subscribe Users] Error: " + error);
                 Log.e(TAG, "[Subscribe Users] Reason: " + reason);
                 Log.e(TAG, "[Subscribe Users] Details: " + details);
+            }
+        });
+
+        // Subscribe to sessions
+        meteor.subscribe(SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(getClass().getSimpleName(), "Subscribe to session list successful");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(getClass().getSimpleName(), "Failed to subscribe to session list");
             }
         });
     }
@@ -457,13 +467,8 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      *
      * @return List of sessions
      */
-    public ArrayList<String> getSessions() {
-        ArrayList<String> sessionList = new ArrayList<>();
-        for (Document document : database.getCollection(COLLECTION_SESSIONS).find()) {
-            String title = document.getField(COLLECTION_SESSIONS_COLUMN_TITLE).toString();
-            sessionList.add(title);
-        }
-        return sessionList;
+    public Document[] getSessions() {
+        return database.getCollection(COLLECTION_SESSIONS).whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, true).find();
     }
 
     /**
@@ -514,7 +519,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         // Only trigger GPS data listener if the user created the session
         if (collectionName.equals(COLLECTION_GPS_DATA)) {
             if (getState() == STATE_CREATED_SESSION && getSession() != null) {
-                mGPSListener.onReceivedGPSData(documentID);
+                mListener.onReceivedGPSData(documentID);
             }
         }
     }
@@ -526,6 +531,20 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 String.format(Locale.US, "Document \"%s\" changed in collection \"%s\"", documentID, collectionName));
         Log.d(TAG, "Updated: " + updatedValuesJson);
         Log.d(TAG, "Removed: " + removedValuesJson);
+
+        if (collectionName.equals(COLLECTION_SESSIONS)) {
+
+            Collection collection = database.getCollection(collectionName);
+            Document document = collection.getDocument(documentID);
+
+            boolean active = (boolean) document.getField(COLLECTION_SESSIONS_COLUMN_ACTIVE);
+            String title = (String) document.getField(COLLECTION_SESSIONS_COLUMN_TITLE);
+
+            // Current session becomes inactive
+            if (getState() == STATE_JOINED_SESSION && !active && session.equals(title)) {
+                mListener.onSessionClosed(title);
+            }
+        }
     }
 
     @Override

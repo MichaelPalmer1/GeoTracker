@@ -30,6 +30,7 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
 
     private JoinSessionListener mListener;
     private Meteor mMeteor;
+    private MeteorController meteorController;
     private Database database;
     private ArrayList<String> items = new ArrayList<>();
     private HashMap<String, String> documentMap = new HashMap<>();
@@ -40,19 +41,9 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
         super.onCreate(savedInstanceState);
 
         adapter = new ArrayAdapter<>(getActivity(), android.R.layout.simple_list_item_1, items);
-        mMeteor = MeteorController.getInstance().getMeteor();
+        meteorController = MeteorController.getInstance();
+        mMeteor = meteorController.getMeteor();
         mMeteor.addCallback(this);
-        mMeteor.subscribe(MeteorController.SUBSCRIPTION_SESSION_LIST, null, new SubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(), "Subscribe to session successful");
-            }
-
-            @Override
-            public void onError(String error, String reason, String details) {
-                Log.e(getClass().getSimpleName(), "Failed to subscribe to session");
-            }
-        });
         database = mMeteor.getDatabase();
         refreshData();
     }
@@ -60,12 +51,6 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
     @Override
     public void onDestroy() {
         Log.d(getClass().getSimpleName(), "OnDestroy: Unsubscribe from " + MeteorController.SUBSCRIPTION_SESSION_LIST);
-        mMeteor.unsubscribe(MeteorController.SUBSCRIPTION_SESSION_LIST, new UnsubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(), "[Join Session] Unsubscribed from session list successfully.");
-            }
-        });
         mMeteor.removeCallback(this);
         super.onDestroy();
     }
@@ -107,10 +92,9 @@ public class JoinSession extends DialogFragment implements MeteorCallback, Dialo
     }
 
     private void refreshData() {
-        Collection sessions = database.getCollection(MeteorController.COLLECTION_SESSIONS);
         items.clear();
         documentMap.clear();
-        for (Document document : sessions.whereEqual(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE, true).find()) {
+        for (Document document : meteorController.getSessions()) {
             String title = document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE).toString();
             items.add(title);
             documentMap.put(document.getId(), title);

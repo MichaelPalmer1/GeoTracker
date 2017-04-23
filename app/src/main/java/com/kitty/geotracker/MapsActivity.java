@@ -9,6 +9,7 @@ import android.support.annotation.NonNull;
 import android.support.v4.app.ActivityCompat;
 import android.support.v4.app.FragmentActivity;
 import android.os.Bundle;
+import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.View;
 import android.widget.Toast;
@@ -43,7 +44,7 @@ public class MapsActivity extends FragmentActivity implements
         View.OnClickListener,
         StartSession.StartSessionListener,
         JoinSession.JoinSessionListener,
-        MeteorController.GPSListener {
+        MeteorController.MeteorControllerListener {
 
     private GoogleMap mMap;
     private FloatingActionsMenu floatingMenu;
@@ -156,7 +157,7 @@ public class MapsActivity extends FragmentActivity implements
      *
      * @param requestCode The request code
      * @param permissions The requested permissions.
-     * @param results The grant results for the corresponding permissions
+     * @param results     The grant results for the corresponding permissions
      */
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] results) {
@@ -283,6 +284,22 @@ public class MapsActivity extends FragmentActivity implements
     }
 
     /**
+     * Called when the session is closed by the session manager
+     *
+     * @param sessionName Session name
+     */
+    @Override
+    public void onSessionClosed(String sessionName) {
+        Log.d(getClass().getSimpleName(), "Session \"" + sessionName + "\" has been closed");
+        leaveSession();
+
+        new AlertDialog.Builder(this)
+                .setMessage("Session manager has ended this session.")
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /**
      * Show join session dialog
      */
     private void openJoinSessionDialog() {
@@ -330,49 +347,53 @@ public class MapsActivity extends FragmentActivity implements
                 data = new HashMap<>(),
                 options = new HashMap<>();
 
-        Log.d(getClass().getSimpleName(), "Ending session...");
-
-        // Hide/show buttons
-        btnStartSession.setVisibility(View.VISIBLE);
-        btnJoinSession.setVisibility(View.VISIBLE);
-        btnEndSession.setVisibility(View.GONE);
-
         // Build query
         query.put("_id", meteorController.getSessionDocumentId());
         data.put(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
         dataToUpdate.put("$set", data);
 
         // Deactivate the session
+        Log.d(getClass().getSimpleName(), "Ending session...");
         meteorController.getMeteor().update(MeteorController.COLLECTION_SESSIONS, query, dataToUpdate, options,
-                new ResultListener() {
-                    @Override
-                    public void onSuccess(String result) {
-                        Log.d(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "stopped: " + result);
-                    }
+            new ResultListener() {
+                @Override
+                public void onSuccess(String result) {
+                    Log.d(getClass().getSimpleName(),
+                            "Session \"" + meteorController.getSession() + "\" " + "stopped: " + result);
 
-                    @Override
-                    public void onError(String error, String reason, String details) {
-                        Log.e(getClass().getSimpleName(),
-                                "Session \"" + meteorController.getSession() + "\" " + "failed to stop with " +
-                                        "error: \"" + error + "\", reason: \"" + reason +
-                                        "\", details: \"" + details + "\".");
-                    }
+                    // Unsubscribe from the session
+                    meteorController.getMeteor().unsubscribe(meteorController.getSession());
+
+                    // Clear data
+                    meteorController.clearSession();
+
+                    // Hide/show buttons
+                    btnStartSession.setVisibility(View.VISIBLE);
+                    btnJoinSession.setVisibility(View.VISIBLE);
+                    btnEndSession.setVisibility(View.GONE);
+
+                    // Show confirmation
+                    new AlertDialog.Builder(MapsActivity.this)
+                            .setMessage("Session has ended")
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
                 }
-        );
 
-        // Unsubscribe from the session
-        final String session = meteorController.getSession();
-        meteorController.getMeteor().unsubscribe(session, new UnsubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(),
-                        "Ended and unsubscribed from session \"" + session + "\"");
+                @Override
+                public void onError(String error, String reason, String details) {
+                    Log.e(getClass().getSimpleName(),
+                            "Session \"" + meteorController.getSession() + "\" " + "failed to stop with " +
+                                    "error: \"" + error + "\", reason: \"" + reason +
+                                    "\", details: \"" + details + "\".");
+
+                    // Show error
+                    new AlertDialog.Builder(MapsActivity.this)
+                            .setMessage("Failed to end session")
+                            .setPositiveButton(android.R.string.ok, null)
+                            .show();
+                }
             }
-        });
-
-        // Clear data
-        meteorController.clearSession();
+        );
     }
 
     /**
@@ -421,8 +442,7 @@ public class MapsActivity extends FragmentActivity implements
             LatLng location = new LatLng(latitude, longitude);
             mapData.add(location);
 
-            if (mProvider == null)
-            {
+            if (mProvider == null) {
                 mProvider = new HeatmapTileProvider.Builder()
                         .data(mapData)
                         .build();
