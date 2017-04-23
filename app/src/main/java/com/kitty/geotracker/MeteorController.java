@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.preference.PreferenceManager;
-import android.support.v7.app.AlertDialog;
 import android.util.Log;
 
 import com.google.android.gms.iid.InstanceID;
@@ -21,6 +20,7 @@ import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
 import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.SubscribeListener;
+import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -36,7 +36,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
     private MeteorControllerListener mListener = null;
-    private Context context;
     private final String TAG = getClass().getSimpleName();
 
     // States
@@ -71,8 +70,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public static final String SUBSCRIPTION_USERS = "Users";
 
     public interface MeteorControllerListener {
-        public void onReceivedGPSData(final String documentID);
-        public void onSessionClosed(String sessionName);
+        void onReceivedGPSData(final String documentID);
+        void onSessionClosed(String sessionName);
+        void onSessionError(String message);
     }
 
     /**
@@ -81,9 +81,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      * @param context Context
      */
     private MeteorController(Context context) {
-        // Save context
-        this.context = context;
-
         // Get meteor url from preferences
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
@@ -381,10 +378,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                                 clearSession();
 
                                 // Show error dialog
-                                new AlertDialog.Builder(context)
-                                        .setMessage("Session subscription failed")
-                                        .setPositiveButton(android.R.string.ok, null)
-                                        .show();
+                                mListener.onSessionError("Session subscription failed");
                             }
                         });
 
@@ -408,10 +402,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e("CreateSession", "[Create Session] Details: " + details);
 
                 // Show error dialog
-                new AlertDialog.Builder(context)
-                        .setMessage("Session creation failed")
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show();
+                mListener.onSessionError("Session creation failed");
             }
         });
     }
@@ -446,9 +437,28 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[Join Session] Reason: " + reason);
                 Log.e(TAG, "[Join Session] Details: " + details);
                 clearSession();
-                new AlertDialog.Builder(context)
-                        .setMessage("Failed to join session")
-                        .show();
+                mListener.onSessionError("Failed to join session");
+            }
+        });
+    }
+
+    /**
+     * Leave the current session
+     */
+    public void leaveSession() {
+        // Validate a session is joined
+        if (getState() != STATE_JOINED_SESSION || session == null) {
+            return;
+        }
+
+        Log.d(TAG, "[Leave Session] Leaving session \"" + session + "\"");
+
+        // Unsubscribe from the session
+        meteor.unsubscribe(session, new UnsubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "[Leave Session] Left session");
+                clearSession();
             }
         });
     }
