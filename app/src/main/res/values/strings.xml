@@ -14,4 +14,6 @@
     <string name="pref_header_general">General</string>
     <string name="pref_title_meteor_ip">Meteor IP</string>
 
+    <string name="location_permission_required">Location permission is required</string>
+
 </resources>
