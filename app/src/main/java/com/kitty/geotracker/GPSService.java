@@ -18,41 +18,41 @@ public class GPSService extends Service implements LocationListener {
     private MeteorController meteorController;
     private LocationManager locationManager;
     private static final long MIN_UPDATE_INTERVAL = 1000; // in milliseconds
+    private final String TAG = getClass().getSimpleName();
 
     @Override
     public void onCreate() {
-        Log.d(getClass().getSimpleName(), "onCreate()");
+        Log.d(TAG, "Service created");
         super.onCreate();
 
         // Create instance of our meteor controller
         if (!MeteorController.hasInstance()) {
-            Log.d(getClass().getSimpleName(), "Creating meteor instance from service");
             MeteorController.createInstance(this);
         }
         meteorController = MeteorController.getInstance();
-        Log.d(getClass().getSimpleName(), "Getting location manager from service");
         locationManager = (LocationManager) getSystemService(Context.LOCATION_SERVICE);
     }
 
     @Override
     public void onDestroy() {
-        Log.d(getClass().getSimpleName(), "onDestroy()");
         locationManager.removeUpdates(this);
+        Log.d(TAG, "Stopped location updates");
         super.onDestroy();
     }
 
     @Override
     public int onStartCommand(Intent intent, int flags, int startId) {
-        Log.d(getClass().getSimpleName(), "Start command called.");
+        Log.d(TAG, "Service started");
         try {
             locationManager.requestLocationUpdates(
                     locationManager.getBestProvider(new Criteria(), true), MIN_UPDATE_INTERVAL, 0, this);
-            Log.d(getClass().getSimpleName(), "Location updates started in service");
-            return super.onStartCommand(intent, flags, startId);
+            Log.d(TAG, "Started location updates");
         } catch (SecurityException e) {
-            Log.e(getClass().getSimpleName(), "Service failed to start");
+            Log.e(TAG, "Could not start service due to missing permissions. Stopping...");
+            stopSelf();
             return Service.START_NOT_STICKY;
         }
+        return super.onStartCommand(intent, flags, startId);
     }
 
     @Nullable
@@ -63,22 +63,22 @@ public class GPSService extends Service implements LocationListener {
 
     @Override
     public void onLocationChanged(Location location) {
-        Log.d(getClass().getSimpleName(), "Service received location: " + location.toString());
+        Log.d(TAG, "Posting location: " + location.toString());
         meteorController.postLocation(location);
     }
 
     @Override
     public void onStatusChanged(String provider, int status, Bundle extras) {
-
+        Log.d(TAG, "Provider \"" + provider + "\" changed status to \"" + status + "\": " + extras.toString());
     }
 
     @Override
     public void onProviderEnabled(String provider) {
-
+        Log.d(TAG, "Provider \"" + provider + "\" enabled.");
     }
 
     @Override
     public void onProviderDisabled(String provider) {
-
+        Log.d(TAG, "Provider \"" + provider + "\" disabled.");
     }
 }

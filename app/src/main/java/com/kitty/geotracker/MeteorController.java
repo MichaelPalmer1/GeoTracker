@@ -4,7 +4,6 @@ import android.content.Context;
 import android.content.SharedPreferences;
 import android.location.Location;
 import android.preference.PreferenceManager;
-import android.support.v7.app.AlertDialog;
 import android.util.Log;
 
 import com.google.android.gms.iid.InstanceID;
@@ -21,6 +20,7 @@ import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
 import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.SubscribeListener;
+import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -36,7 +36,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     private int state = STATE_NO_SESSION;
     private static final String DEFAULT_METEOR_URL = "geotracker-web.herokuapp.com";
     private MeteorControllerListener mListener = null;
-    private Context context;
     private final String TAG = getClass().getSimpleName();
 
     // States
@@ -72,8 +71,9 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public static final String SUBSCRIPTION_USERS = "Users";
 
     public interface MeteorControllerListener {
-        public void onReceivedGPSData(final String documentID);
-        public void onSessionClosed(String sessionName);
+        void onReceivedGPSData(final String documentID);
+        void onSessionClosed(String sessionName);
+        void onSessionMessage(String message);
     }
 
     /**
@@ -82,9 +82,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      * @param context Context
      */
     private MeteorController(Context context) {
-        // Save context
-        this.context = context;
-
         // Get meteor url from preferences
         final SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(context);
 
@@ -382,10 +379,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                                 clearSession();
 
                                 // Show error dialog
-                                new AlertDialog.Builder(context)
-                                        .setMessage("Session subscription failed")
-                                        .setPositiveButton(android.R.string.ok, null)
-                                        .show();
+                                mListener.onSessionMessage("Session subscription failed");
                             }
                         });
 
@@ -409,10 +403,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e("CreateSession", "[Create Session] Details: " + details);
 
                 // Show error dialog
-                new AlertDialog.Builder(context)
-                        .setMessage("Session creation failed")
-                        .setPositiveButton(android.R.string.ok, null)
-                        .show();
+                mListener.onSessionMessage("Session creation failed");
             }
         });
     }
@@ -447,9 +438,76 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                 Log.e(TAG, "[Join Session] Reason: " + reason);
                 Log.e(TAG, "[Join Session] Details: " + details);
                 clearSession();
-                new AlertDialog.Builder(context)
-                        .setMessage("Failed to join session")
-                        .show();
+                mListener.onSessionMessage("Failed to join session");
+            }
+        });
+    }
+
+    /**
+     * Leave the current session
+     */
+    public void leaveSession() {
+        // Validate a session is joined
+        if (getState() != STATE_JOINED_SESSION || session == null) {
+            return;
+        }
+
+        Log.d(TAG, "[Leave Session] Leaving session \"" + session + "\"");
+
+        // Unsubscribe from the session
+        meteor.unsubscribe(session, new UnsubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "[Leave Session] Left session");
+                clearSession();
+            }
+        });
+    }
+
+    /**
+     * End the current session
+     */
+    public void endSession() {
+        // Make sure this is the session creator and that the session exists
+        if (getState() != STATE_CREATED_SESSION || session == null) {
+            return;
+        }
+
+        HashMap<String, Object>
+                query = new HashMap<>(),
+                dataToUpdate = new HashMap<>(),
+                data = new HashMap<>(),
+                options = new HashMap<>();
+
+        // Build query
+        query.put("_id", sessionDocumentId);
+        data.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
+        dataToUpdate.put("$set", data);
+
+        // Deactivate the session
+        Log.d(TAG, "[End Session] Ending session...");
+        meteor.update(COLLECTION_SESSIONS, query, dataToUpdate, options, new ResultListener() {
+            @Override
+            public void onSuccess(String result) {
+                Log.d(TAG, "[End Session] Session \"" + session + "\" ended: " + result);
+
+                // Unsubscribe from the session
+                meteor.unsubscribe(session);
+
+                // Clear data
+                clearSession();
+
+                // Show confirmation
+                mListener.onSessionMessage("Session has ended");
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(TAG, "[End Session] Error ending session \"" + session + "\"");
+                Log.e(TAG, "[End Session] Error: " + error);
+                Log.e(TAG, "[End Session] Reason: " + reason);
+                Log.e(TAG, "[End Session] Details: " + details);
+                mListener.onSessionMessage("Failed to end session");
             }
         });
     }

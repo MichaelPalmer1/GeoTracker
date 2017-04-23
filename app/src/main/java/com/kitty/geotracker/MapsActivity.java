@@ -35,7 +35,6 @@ import java.util.ArrayList;
 import java.util.HashMap;
 
 import im.delight.android.ddp.ResultListener;
-import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Document;
 
 import static android.content.pm.PackageManager.PERMISSION_GRANTED;
@@ -144,7 +143,6 @@ public class MapsActivity extends FragmentActivity implements
 
     @Override
     public void onDestroy() {
-        Log.d(getClass().getSimpleName(), "onDestroy()");
         stopLocationUpdates();
         meteorController.disconnect();
         super.onDestroy();
@@ -324,6 +322,19 @@ public class MapsActivity extends FragmentActivity implements
     }
 
     /**
+     * Called when the meteor controller received a informational or error message.
+     *
+     * @param message Message
+     */
+    @Override
+    public void onSessionMessage(String message) {
+        new AlertDialog.Builder(this)
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .show();
+    }
+
+    /**
      * Show join session dialog
      */
     private void openJoinSessionDialog() {
@@ -346,18 +357,10 @@ public class MapsActivity extends FragmentActivity implements
         // Stop location updates
         stopLocationUpdates();
 
-        // Unsubscribe from the session
-        final String session = meteorController.getSession();
-        meteorController.getMeteor().unsubscribe(session, new UnsubscribeListener() {
-            @Override
-            public void onSuccess() {
-                Log.d(getClass().getSimpleName(),
-                        "Left and unsubscribed from session \"" + session + "\"");
-            }
-        });
+        // Leave the session
+        meteorController.leaveSession();
 
         // Clear data
-        meteorController.clearSession();
         mMap.clear();
         mapMarkers.clear();
     }
@@ -437,11 +440,11 @@ public class MapsActivity extends FragmentActivity implements
      * Stop the location update service
      */
     private void stopLocationUpdates() {
+        Log.d(getClass().getSimpleName(), "Stopping location updates...");
         try {
-            Log.d(getClass().getSimpleName(), "Stopping location updates...");
             stopService(serviceIntent);
         } catch (NullPointerException e) {
-            // Let it fly
+            Log.e(getClass().getSimpleName(), "Failed to stop GPS Service. It may not be running.");
         }
     }
 
