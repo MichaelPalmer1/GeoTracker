@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import com.getbase.floatingactionbutton.FloatingActionButton;
@@ -142,12 +143,21 @@ public class MapsActivity extends FragmentActivity implements
     protected void onPause() {
         Log.d(getClass().getSimpleName(), "onPause()");
         super.onPause();
+
+        if (meteorController.getState() == MeteorController.STATE_CREATED_SESSION) {
+            meteorController.disconnect();
+        }
     }
 
     @Override
     protected void onResume() {
         Log.d(getClass().getSimpleName(), "onResume()");
         super.onResume();
+
+        if (meteorController != null && !meteorController.getMeteor().isConnected()) {
+            Log.d(getClass().getSimpleName(), "Reconnecting...");
+            meteorController.getMeteor().reconnect();
+        }
     }
 
     /**
@@ -256,10 +266,25 @@ public class MapsActivity extends FragmentActivity implements
         // Create the session
         meteorController.createSession(sessionName);
 
+        // Start the management
+        onSessionManage(sessionName);
+    }
+
+    /**
+     * Triggered when a session should start being managed
+     *
+     * @param sessionName Name of the session that is to be managed
+     */
+    @Override
+    public void onSessionManage(String sessionName) {
         // Hide the start and join session buttons, show the end session button.
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
+        btnLeaveSession.setVisibility(View.GONE);
         btnEndSession.setVisibility(View.VISIBLE);
+
+        // Keep the screen on
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     /**
@@ -279,6 +304,7 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
         btnLeaveSession.setVisibility(View.VISIBLE);
+        btnEndSession.setVisibility(View.GONE);
     }
 
     /**
@@ -303,11 +329,15 @@ public class MapsActivity extends FragmentActivity implements
      * @param message Message
      */
     @Override
-    public void onSessionMessage(String message) {
-        new AlertDialog.Builder(this)
-                .setMessage(message)
-                .setPositiveButton(android.R.string.ok, null)
-                .show();
+    public void onSessionMessage(String message, boolean toast) {
+        if (toast) {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show();
+        } else {
+            new AlertDialog.Builder(this)
+                    .setMessage(message)
+                    .setPositiveButton(android.R.string.ok, null)
+                    .show();
+        }
     }
 
     /**
@@ -349,6 +379,14 @@ public class MapsActivity extends FragmentActivity implements
                 dataToUpdate = new HashMap<>(),
                 data = new HashMap<>(),
                 options = new HashMap<>();
+
+        // Allow screen to turn off
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
+
+        // Make sure a connection is established
+        if (!meteorController.getMeteor().isConnected()) {
+            meteorController.getMeteor().reconnect();
+        }
 
         // Build query
         query.put("_id", meteorController.getSessionDocumentId());
