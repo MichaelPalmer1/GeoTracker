@@ -4,7 +4,6 @@ package com.kitty.geotracker;
 import android.app.Service;
 import android.content.Context;
 import android.content.Intent;
-import android.location.Criteria;
 import android.location.Location;
 import android.location.LocationListener;
 import android.location.LocationManager;
@@ -44,8 +43,7 @@ public class GPSService extends Service implements LocationListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "Service started");
         try {
-            locationManager.requestLocationUpdates(
-                    locationManager.getBestProvider(new Criteria(), true), MIN_UPDATE_INTERVAL, 0, this);
+            locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_UPDATE_INTERVAL, 0, this);
             Log.d(TAG, "Started location updates");
         } catch (SecurityException e) {
             Log.e(TAG, "Could not start service due to missing permissions. Stopping...");

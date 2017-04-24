@@ -36,6 +36,10 @@ public class StartSession extends DialogFragment implements DialogInterface.OnCl
     @Override
     public void onStart() {
         super.onStart();
+
+        EditText sessionName = (EditText) getDialog().findViewById(R.id.start_session_name);
+        sessionName.setHint("Session Name");
+
         final AlertDialog dialog = (AlertDialog) getDialog();
         if (dialog != null) {
             dialog.getButton(AlertDialog.BUTTON_POSITIVE).setOnClickListener(new View.OnClickListener() {
