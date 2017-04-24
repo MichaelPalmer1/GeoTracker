@@ -43,8 +43,6 @@ public class GPSService extends Service implements LocationListener {
     public int onStartCommand(Intent intent, int flags, int startId) {
         Log.d(TAG, "Service started");
         try {
-//            String provider = locationManager.getBestProvider(new Criteria(), true);
-            locationManager.requestLocationUpdates(LocationManager.NETWORK_PROVIDER, MIN_UPDATE_INTERVAL, 0, this);
             locationManager.requestLocationUpdates(LocationManager.GPS_PROVIDER, MIN_UPDATE_INTERVAL, 0, this);
             Log.d(TAG, "Started location updates");
         } catch (SecurityException e) {

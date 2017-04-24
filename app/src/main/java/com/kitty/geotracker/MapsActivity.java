@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.support.v7.app.AlertDialog;
 import android.util.Log;
 import android.view.View;
+import android.view.WindowManager;
 import android.widget.Toast;
 
 import com.getbase.floatingactionbutton.FloatingActionButton;
@@ -265,10 +266,25 @@ public class MapsActivity extends FragmentActivity implements
         // Create the session
         meteorController.createSession(sessionName);
 
+        // Start the management
+        onSessionManage(sessionName);
+    }
+
+    /**
+     * Triggered when a session should start being managed
+     *
+     * @param sessionName Name of the session that is to be managed
+     */
+    @Override
+    public void onSessionManage(String sessionName) {
         // Hide the start and join session buttons, show the end session button.
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
+        btnLeaveSession.setVisibility(View.GONE);
         btnEndSession.setVisibility(View.VISIBLE);
+
+        // Keep the screen on
+        getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
     }
 
     /**
@@ -288,6 +304,7 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
         btnLeaveSession.setVisibility(View.VISIBLE);
+        btnEndSession.setVisibility(View.GONE);
     }
 
     /**
@@ -362,6 +379,9 @@ public class MapsActivity extends FragmentActivity implements
                 dataToUpdate = new HashMap<>(),
                 data = new HashMap<>(),
                 options = new HashMap<>();
+
+        // Allow screen to turn off
+        getWindow().clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
 
         // Make sure a connection is established
         if (!meteorController.getMeteor().isConnected()) {

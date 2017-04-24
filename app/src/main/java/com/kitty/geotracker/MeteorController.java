@@ -20,7 +20,6 @@ import im.delight.android.ddp.MeteorCallback;
 import im.delight.android.ddp.MeteorSingleton;
 import im.delight.android.ddp.ResultListener;
 import im.delight.android.ddp.SubscribeListener;
-import im.delight.android.ddp.UnsubscribeListener;
 import im.delight.android.ddp.db.Collection;
 import im.delight.android.ddp.db.Database;
 import im.delight.android.ddp.db.Document;
@@ -46,6 +45,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     // Sessions
     public static final String COLLECTION_SESSIONS = "Sessions";
     public static final String COLLECTION_SESSIONS_COLUMN_TITLE = "title";
+    public static final String COLLECTION_SESSIONS_COLUMN_MANAGER = "manager";
     public static final String COLLECTION_SESSIONS_COLUMN_ACTIVE = "active";
 
     // GPS Data
@@ -72,6 +72,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public interface MeteorControllerListener {
         void onReceivedGPSData(final String documentID);
         void onSessionClosed(String sessionName);
+        void onSessionManage(String sessionName);
         void onSessionMessage(String message, boolean toast);
     }
 
@@ -328,6 +329,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         Log.d(TAG, "[Create Session] Creating new session \"" + sessionName + "\"...");
         HashMap<String, Object> sessionData = new HashMap<>();
         sessionData.put(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName);
+        sessionData.put(COLLECTION_SESSIONS_COLUMN_MANAGER, userId);
         sessionData.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, true);
         meteor.insert(COLLECTION_SESSIONS, sessionData, new ResultListener() {
             @Override
@@ -397,32 +399,49 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
      */
     public void joinSession(final String sessionName) {
         Log.d(TAG, "[Join Session] Joining session \"" + sessionName + "\"");
-        setState(STATE_JOINED_SESSION);
+
+        // Set session
         session = sessionName;
-//        sessionDocumentId = meteor
-//                .getDatabase()
-//                .getCollection(COLLECTION_SESSIONS)
-//                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
-//                .findOne()
-//                .getId();
+
+        // Check if this user created the session
+        Document document = meteor.getDatabase().getCollection(COLLECTION_SESSIONS)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_TITLE, sessionName)
+                .whereEqual(COLLECTION_SESSIONS_COLUMN_ACTIVE, true)
+                .findOne();
+
+        // Stop processing if this user is not the original manager
+        Object manager = document.getField(COLLECTION_SESSIONS_COLUMN_MANAGER);
+        if (manager == null || !manager.equals(userId)) {
+            setState(STATE_JOINED_SESSION);
+            return;
+        }
+
+        // Restore session state
+        setState(STATE_CREATED_SESSION);
+        sessionDocumentId = document.getId();
 
         // Subscribe to the session
-//        meteor.subscribe(sessionName, null, new SubscribeListener() {
-//            @Override
-//            public void onSuccess() {
-//                Log.d(TAG, "[Join Session] Session joined successfully.");
-//            }
-//
-//            @Override
-//            public void onError(String error, String reason, String details) {
-//                Log.e(TAG, "[Join Session] Failed to join session \"" + sessionName + "\"");
-//                Log.e(TAG, "[Join Session] Error: " + error);
-//                Log.e(TAG, "[Join Session] Reason: " + reason);
-//                Log.e(TAG, "[Join Session] Details: " + details);
-//                clearSession();
-//                mListener.onSessionMessage("Failed to join session", false);
-//            }
-//        });
+        mListener.onSessionMessage("Loading data. Please wait...", true);
+        meteor.subscribe(sessionName, null, new SubscribeListener() {
+            @Override
+            public void onSuccess() {
+                Log.d(TAG, "Re-manage \"" + sessionName + "\" successfully");
+                mListener.onSessionMessage("Rejoined session \"" + sessionName + "\" as manager", false);
+                mListener.onSessionManage(sessionName);
+            }
+
+            @Override
+            public void onError(String error, String reason, String details) {
+                Log.e(TAG, "[Re-manage \"" + sessionName + "\"] Failed to subscribe.");
+                Log.e(TAG, "[Re-manage \"" + sessionName + "\"] Error: " + error);
+                Log.e(TAG, "[Re-manage \"" + sessionName + "\"] Reason: " + reason);
+                Log.e(TAG, "[Re-manage \"" + sessionName + "\"] Details: " + details);
+                clearSession();
+
+                // Show error dialog
+                mListener.onSessionMessage("Failed to re-join session as manager", false);
+            }
+        });
     }
 
     /**
@@ -436,68 +455,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
 
         Log.d(TAG, "[Leave Session] Leaving session \"" + session + "\"");
         clearSession();
-
-//        // Unsubscribe from the session
-//        meteor.unsubscribe(session, new UnsubscribeListener() {
-//            @Override
-//            public void onSuccess() {
-//                Log.d(TAG, "[Leave Session] Left session");
-//                clearSession();
-//            }
-//        });
-    }
-
-    /**
-     * End the current session
-     */
-    public void endSession() {
-        // Make sure this is the session creator and that the session exists
-        if (getState() != STATE_CREATED_SESSION || session == null) {
-            return;
-        }
-
-        // Make sure a connection is established
-        if (!meteor.isConnected()) {
-            meteor.reconnect();
-        }
-
-        HashMap<String, Object>
-                query = new HashMap<>(),
-                dataToUpdate = new HashMap<>(),
-                data = new HashMap<>(),
-                options = new HashMap<>();
-
-        // Build query
-        query.put("_id", sessionDocumentId);
-        data.put(COLLECTION_SESSIONS_COLUMN_ACTIVE, false);
-        dataToUpdate.put("$set", data);
-
-        // Deactivate the session
-        Log.d(TAG, "[End Session] Ending session...");
-        meteor.update(COLLECTION_SESSIONS, query, dataToUpdate, options, new ResultListener() {
-            @Override
-            public void onSuccess(String result) {
-                Log.d(TAG, "[End Session] Session \"" + session + "\" ended: " + result);
-
-                // Unsubscribe from the session
-                meteor.unsubscribe(session);
-
-                // Clear data
-                clearSession();
-
-                // Show confirmation
-                mListener.onSessionMessage("Session has ended", false);
-            }
-
-            @Override
-            public void onError(String error, String reason, String details) {
-                Log.e(TAG, "[End Session] Error ending session \"" + session + "\"");
-                Log.e(TAG, "[End Session] Error: " + error);
-                Log.e(TAG, "[End Session] Reason: " + reason);
-                Log.e(TAG, "[End Session] Details: " + details);
-                mListener.onSessionMessage("Failed to end session", false);
-            }
-        });
     }
 
     /**
@@ -529,6 +486,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
             return;
         }
 
+        // TODO: Remove this
         mListener.onSessionMessage("Posting " + location.getProvider() + " data", true);
 
         // Make sure there is a connection to Meteor
@@ -553,6 +511,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     @Override
     public void onConnect(boolean signedInAutomatically) {
         Log.d(TAG, "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
+        // TODO: Remove this
         mListener.onSessionMessage("Connected to Meteor", true);
 
         // Try to restore subscription if it exists
@@ -585,12 +544,14 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     @Override
     public void onDisconnect() {
         Log.d(TAG, "Disconnected from Meteor");
+        // TODO: Remove this
         mListener.onSessionMessage("Disconnected from Meteor", true);
     }
 
     @Override
     public void onException(Exception e) {
         Log.d(TAG, "Meteor error: " + e.getMessage());
+        // TODO: Remove this
         mListener.onSessionMessage("Meteor error: " + e.getMessage(), false);
     }
 
@@ -617,7 +578,6 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         Log.d(TAG, "Removed: " + removedValuesJson);
 
         if (collectionName.equals(COLLECTION_SESSIONS)) {
-
             Collection collection = database.getCollection(collectionName);
             Document document = collection.getDocument(documentID);
 
