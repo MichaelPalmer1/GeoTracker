@@ -489,7 +489,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
         }
 
         // TODO: Remove this
-        mListener.onSessionMessage("Posting " + location.getProvider() + " data", true);
+//        mListener.onSessionMessage("Posting " + location.getProvider() + " data", true);
 
         // Make sure there is a connection to Meteor
         if (!meteor.isConnected()) {
@@ -514,7 +514,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public void onConnect(boolean signedInAutomatically) {
         Log.d(TAG, "Connected to Meteor. Auto-signed in: " + signedInAutomatically);
         // TODO: Remove this
-        mListener.onSessionMessage("Connected to Meteor", true);
+//        mListener.onSessionMessage("Connected to Meteor", true);
 
         // Try to restore subscription if it exists
         if (getState() == STATE_CREATED_SESSION && session != null) {
@@ -547,14 +547,14 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
     public void onDisconnect() {
         Log.d(TAG, "Disconnected from Meteor");
         // TODO: Remove this
-        mListener.onSessionMessage("Disconnected from Meteor", true);
+//        mListener.onSessionMessage("Disconnected from Meteor", true);
     }
 
     @Override
     public void onException(Exception e) {
         Log.d(TAG, "Meteor error: " + e.getMessage());
         // TODO: Remove this
-        mListener.onSessionMessage("Meteor error: " + e.getMessage(), false);
+//        mListener.onSessionMessage("Meteor error: " + e.getMessage(), false);
     }
 
     @Override
