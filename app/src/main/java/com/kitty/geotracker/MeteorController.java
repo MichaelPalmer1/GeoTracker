@@ -14,6 +14,7 @@ import org.json.JSONObject;
 
 import java.util.HashMap;
 import java.util.Locale;
+import java.util.Map;
 
 import im.delight.android.ddp.Meteor;
 import im.delight.android.ddp.MeteorCallback;
@@ -357,6 +358,7 @@ public class MeteorController implements MeteorCallback, SharedPreferences.OnSha
                     @Override
                     public void onSuccess() {
                         Log.d(TAG, "Subscribed to \"" + sessionName + "\" successfully");
+                        MapsActivity.canUpdateHeatMap = true;
                     }
 
                     @Override

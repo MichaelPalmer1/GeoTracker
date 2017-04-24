@@ -59,6 +59,8 @@ public class MapsActivity extends FragmentActivity implements
     HeatmapTileProvider mProvider;
     TileOverlay mOverlay;
 
+    static boolean canUpdateHeatMap = false;
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -477,8 +479,13 @@ public class MapsActivity extends FragmentActivity implements
                 mOverlay = mMap.addTileOverlay(new TileOverlayOptions().tileProvider(mProvider));
             }
 
-            mProvider.setData(mapData);
-            mOverlay.clearTileCache();
+
+            if (canUpdateHeatMap)
+            {
+                mProvider.setData(mapData);
+                mOverlay.clearTileCache();
+            }
+
 
             // Get the user's id
             String userId = document.getField(MeteorController.COLLECTION_GPS_DATA_COLUMN_USER_ID).toString();
