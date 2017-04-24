@@ -48,7 +48,6 @@ public class ViewSession extends DialogFragment implements MeteorCallback, Dialo
 
     @Override
     public void onDestroy() {
-        Log.d(getClass().getSimpleName(), "OnDestroy: Unsubscribe from " + MeteorController.SUBSCRIPTION_SESSION_LIST);
         mMeteor.removeCallback(this);
         super.onDestroy();
     }
@@ -117,7 +116,7 @@ public class ViewSession extends DialogFragment implements MeteorCallback, Dialo
                 Document document = collection.getDocument(documentID);
                 boolean active = (boolean) document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_ACTIVE);
 
-                // If this session is not active, don't add it to the list
+                // If this session is active, don't add it to the list
                 if (active) {
                     return;
                 }
@@ -156,12 +155,12 @@ public class ViewSession extends DialogFragment implements MeteorCallback, Dialo
             String title = (String) document.getField(MeteorController.COLLECTION_SESSIONS_COLUMN_TITLE);
 
             if (active && !items.contains(title)) {
-                // Session becomes inactive
+                // Session becomes active
                 items.remove(title);
                 documentMap.remove(documentID);
                 adapter.notifyDataSetChanged();
             } else if (!active && items.contains(title)) {
-                // Session becomes active
+                // Session becomes inactive
                 items.add(title);
                 documentMap.put(documentID, title);
                 adapter.notifyDataSetChanged();
