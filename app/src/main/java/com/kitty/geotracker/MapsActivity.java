@@ -500,11 +500,8 @@ public class MapsActivity extends FragmentActivity implements
             }
 
 
-            if (canUpdateHeatMap)
-            {
-                mProvider.setData(mapData);
-                mOverlay.clearTileCache();
-            }
+            mProvider.setData(mapData);
+            mOverlay.clearTileCache();
 
 
             // Get the user's id
