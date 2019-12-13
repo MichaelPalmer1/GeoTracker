@@ -30,6 +30,7 @@ import com.google.android.gms.maps.model.TileOverlayOptions;
 import com.google.maps.android.heatmaps.HeatmapTileProvider;
 import com.kitty.geotracker.dialogs.JoinSession;
 import com.kitty.geotracker.dialogs.StartSession;
+import com.kitty.geotracker.dialogs.ViewSession;
 
 import java.util.ArrayList;
 import java.util.HashMap;
@@ -44,11 +45,12 @@ public class MapsActivity extends FragmentActivity implements
         View.OnClickListener,
         StartSession.StartSessionListener,
         JoinSession.JoinSessionListener,
+        ViewSession.ViewSessionListener,
         MeteorController.MeteorControllerListener {
 
     private GoogleMap mMap;
     private FloatingActionsMenu floatingMenu;
-    private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnEndSession;
+    private FloatingActionButton btnJoinSession, btnStartSession, btnLeaveSession, btnEndSession, btnViewSession;
     private MeteorController meteorController;
     private HashMap<String, Marker> mapMarkers = new HashMap<>();
     private Intent serviceIntent;
@@ -72,6 +74,7 @@ public class MapsActivity extends FragmentActivity implements
         FloatingActionButton btnSettings = (FloatingActionButton) findViewById(R.id.btn_settings);
         btnJoinSession = (FloatingActionButton) findViewById(R.id.btn_join_session);
         btnStartSession = (FloatingActionButton) findViewById(R.id.btn_start_session);
+        btnViewSession = (FloatingActionButton) findViewById(R.id.btn_view_session);
         btnLeaveSession = (FloatingActionButton) findViewById(R.id.btn_leave_session);
         btnEndSession = (FloatingActionButton) findViewById(R.id.btn_end_session);
         btnSettings.setOnClickListener(this);
@@ -79,6 +82,7 @@ public class MapsActivity extends FragmentActivity implements
         btnStartSession.setOnClickListener(this);
         btnLeaveSession.setOnClickListener(this);
         btnEndSession.setOnClickListener(this);
+        btnViewSession.setOnClickListener(this);
 
         // Get map fragment and register callback
         SupportMapFragment mapFragment = (SupportMapFragment) getSupportFragmentManager()
@@ -122,6 +126,12 @@ public class MapsActivity extends FragmentActivity implements
 
                 // Open the join session dialog
                 openJoinSessionDialog();
+                break;
+
+            case R.id.btn_view_session:
+                // Create the start session dialog
+                ViewSession viewSession = new ViewSession();
+                viewSession.show(getSupportFragmentManager(), viewSession.getClass().getSimpleName());
                 break;
 
             case R.id.btn_leave_session:
@@ -284,6 +294,7 @@ public class MapsActivity extends FragmentActivity implements
         btnJoinSession.setVisibility(View.GONE);
         btnLeaveSession.setVisibility(View.GONE);
         btnEndSession.setVisibility(View.VISIBLE);
+        btnViewSession.setVisibility(View.GONE);
 
         // Keep the screen on
         getWindow().addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON);
@@ -305,6 +316,20 @@ public class MapsActivity extends FragmentActivity implements
         // Hide the start and join session buttons, show the leave session button.
         btnStartSession.setVisibility(View.GONE);
         btnJoinSession.setVisibility(View.GONE);
+        btnLeaveSession.setVisibility(View.VISIBLE);
+        btnEndSession.setVisibility(View.GONE);
+        btnViewSession.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void onSessionViewed(String sessionName) {
+        // View the session
+        meteorController.viewSession(sessionName);
+
+        // Hide the start and join session buttons, show the leave session button.
+        btnStartSession.setVisibility(View.GONE);
+        btnJoinSession.setVisibility(View.GONE);
+        btnViewSession.setVisibility(View.GONE);
         btnLeaveSession.setVisibility(View.VISIBLE);
         btnEndSession.setVisibility(View.GONE);
     }
@@ -359,6 +384,7 @@ public class MapsActivity extends FragmentActivity implements
         // Hide the leave session button, show the start and join session buttons
         btnStartSession.setVisibility(View.VISIBLE);
         btnJoinSession.setVisibility(View.VISIBLE);
+        btnViewSession.setVisibility(View.VISIBLE);
         btnLeaveSession.setVisibility(View.GONE);
 
         // Stop location updates
@@ -413,6 +439,7 @@ public class MapsActivity extends FragmentActivity implements
                     // Hide/show buttons
                     btnStartSession.setVisibility(View.VISIBLE);
                     btnJoinSession.setVisibility(View.VISIBLE);
+                    btnViewSession.setVisibility(View.VISIBLE);
                     btnEndSession.setVisibility(View.GONE);
 
                     // Show confirmation

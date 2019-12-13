@@ -32,7 +32,7 @@
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
             app:fab_size="mini"
-            app:fab_title="Settings"
+            app:fab_title="@string/title_activity_settings"
             app:fab_icon="@drawable/ic_build_black_24dp"
             app:fab_colorPressed="@color/white_pressed"/>
 
@@ -42,7 +42,7 @@
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
             app:fab_size="mini"
-            app:fab_title="Start Session"
+            app:fab_title="@string/start_session"
             app:fab_icon="@drawable/ic_add_black_24dp"
             app:fab_colorPressed="@color/white_pressed"/>
 
@@ -52,7 +52,17 @@
             android:layout_height="wrap_content"
             app:fab_colorNormal="@color/white"
             app:fab_size="mini"
-            app:fab_title="Join Session"
+            app:fab_title="@string/join_session"
+            app:fab_icon="@drawable/ic_add_black_24dp"
+            app:fab_colorPressed="@color/white_pressed"/>
+
+        <com.getbase.floatingactionbutton.FloatingActionButton
+            android:id="@+id/btn_view_session"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            app:fab_colorNormal="@color/white"
+            app:fab_size="mini"
+            app:fab_title="@string/view_session"
             app:fab_icon="@drawable/ic_add_black_24dp"
             app:fab_colorPressed="@color/white_pressed"/>
 
@@ -63,7 +73,7 @@
             android:visibility="gone"
             app:fab_colorNormal="@color/white"
             app:fab_size="mini"
-            app:fab_title="End Session"
+            app:fab_title="@string/end_session"
             app:fab_icon="@drawable/ic_cancel_black_24dp"
             app:fab_colorPressed="@color/white_pressed"/>
 
@@ -74,7 +84,7 @@
             android:visibility="gone"
             app:fab_colorNormal="@color/white"
             app:fab_size="mini"
-            app:fab_title="Leave Session"
+            app:fab_title="@string/leave_session"
             app:fab_icon="@drawable/ic_cancel_black_24dp"
             app:fab_colorPressed="@color/white_pressed"/>
 
